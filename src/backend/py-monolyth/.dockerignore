@@ -1,0 +1,33 @@
+# VCS и IDE
+.git
+.gitignore
+.idea
+.vscode
+.DS_Store
+
+# Окружения и кэши
+.venv
+__pycache__
+*.pyc
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+logs.json
+
+# Локальные секреты (конфиги стендов envs/ — не секреты, они нужны в образе)
+.env
+
+# Не нужно в рантайм-образе
+tests
+Dockerfile
+Dockerfile-dev
+.dockerignore
+.gitlab-ci.yml
+.pre-commit-config.yaml
+.secrets.baseline
+.claude
+.cursor
+*.md
+Makefile

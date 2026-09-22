@@ -1,0 +1,199 @@
+# ============================================================
+# IntelliJ IDEA / JetBrains
+# ============================================================
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+.idea_modules/
+atlassian-ide-plugin.xml
+com_crashlytics_export_strings.xml
+crashlytics.properties
+crashlytics-build.properties
+fabric.properties
+http-client.private.env.json
+
+# ============================================================
+# Python
+# ============================================================
+# Байткод и нативные расширения
+__pycache__/
+*.py[codz]
+*$py.class
+*.so
+cython_debug/
+
+# Сборка и дистрибутивы
+.Python
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+wheels/
+share/python-wheels/
+*.egg-info/
+*.egg
+.installed.cfg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+__pypackages__/
+.pdm-build/
+.pdm-python
+.pixi
+.pybuilder/
+target/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Виртуальные окружения
+.venv
+venv/
+.virtualenv/
+venv.bak/
+env.bak/
+
+# Тесты и покрытие
+.pytest_cache/
+.tox/
+.nox/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+*.py,cover
+*.py.cover
+cover/
+htmlcov/
+nosetests.xml
+
+# Линтеры и тайпчекеры
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# Jupyter / IPython / marimo
+.ipynb_checkpoints/
+profile_default/
+ipython_config.py
+__marimo__/
+marimo/_static/
+marimo/_lsp/
+
+# Python-IDE и инструменты
+.spyderproject
+.spyproject
+.ropeproject
+.abstra/
+tempCodeRunnerFile.py
+
+# Документация
+docs/_build/
+/site
+
+# Переводы (скомпилированные и шаблоны gettext)
+*.mo
+*.pot
+
+# Фреймворки
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+instance/
+.webassets-cache
+.scrapy
+.streamlit/secrets.toml
+*.sage.py
+
+# Фоновые задачи (Celery и брокеры)
+celerybeat-schedule
+celerybeat.pid
+rabbitmq/
+rabbitmq-data/
+activemq-data/
+mnesia/
+
+# ============================================================
+# React / Node.js / TypeScript
+# ============================================================
+# Зависимости
+node_modules/
+jspm_packages/
+.pnpm-store/
+.npm/
+
+# Yarn (Berry)
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+
+# Сборка и кэши сборщиков
+.vite/
+.next/
+.parcel-cache/
+.turbo/
+.cache/
+storybook-static/
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+*.local
+
+# Тесты и покрытие
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# Логи пакетных менеджеров
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ============================================================
+# Общее
+# ============================================================
+# Секреты и локальные настройки окружения
+.env
+.env.*
+!.env.example
+!.env.template
+!.env.example-e2e
+.envrc
+.pypirc
+
+# Логи и pid-файлы
+*.log
+logs/
+*.pid
+
+# Локальные дампы Redis
+*.rdb
+*.aof
+
+# Другие IDE
+.vscode/
+
+# ОС
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,38 @@
+# syntax=docker/dockerfile:1
+# Dev-сборка: py-main-lib берётся из локального build-context-а:
+#   docker build -f Dockerfile-dev --build-context py-main-lib=../py-main-lib .
+
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --all-groups
+
+COPY --from=py-main-lib . /py-main-lib
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --no-deps /py-main-lib
+
+COPY . .
+
+FROM python:3.13-slim
+
+RUN groupadd --gid 1000 app && useradd --uid 1000 --gid app --no-create-home app
+
+WORKDIR /app
+COPY --from=builder --chown=app:app /app /app
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1
+
+USER app
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["python", "-c", "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.getenv(\"FAST_API_PORT\", \"8000\")}/v1/health')"]
+
+CMD ["python", "uvi_run.py"]

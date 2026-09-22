@@ -1,0 +1,205 @@
+[project]
+name = "python-boilerplate"
+version = "0.1.0"
+description = "Production FastAPI boilerplate: Kafka (FastStream), AsyncAPI, OTel, Vault."
+requires-python = ">=3.12"
+# Диапазоны вместо жёстких пинов: точные версии фиксирует uv.lock,
+# обновление — `uv lock --upgrade` (или Renovate) + прогон `make check`.
+dependencies = [
+    # Core
+    "fastapi>=0.115,<1.0",
+    "pydantic>=2.10,<3",
+    "pydantic-settings>=2.7,<3",
+    "fast-depends>=3,<4",
+    # ASGI server (uvloop/httptools/websockets/watchfiles тянутся через [standard])
+    "uvicorn[standard]>=0.34,<1",
+    # Database ([asyncio] гарантирует greenlet на всех платформах, включая macOS arm64)
+    "SQLAlchemy[asyncio]>=2.0.29,<2.1",
+    "sqlalchemy-searchable>=2.1,<3",
+    "SQLAlchemy-Utils>=0.41,<1",
+    "asyncpg>=0.30,<1",
+    "alembic>=1.14,<2",
+    # Brokers (FastStream + Kafka). Линия 0.7 (мигрировано 2026-07);
+    # потолок <0.8 — следующую major-линию брать осознанно вместе с py-main-lib.
+    "faststream>=0.7,<0.8",
+    "aiokafka>=0.12,<1",
+    # Cache
+    "redis>=5.2,<7",
+    # Security
+    "python-multipart>=0.0.20",
+    "PyJWT>=2.10,<3",
+    "cryptography>=44",
+    "hvac>=2.3,<3",
+    # HTTP client
+    "httpx>=0.28,<1",
+    # Metrics, tracing, monitoring
+    "prometheus-client>=0.21,<1",
+    "psutil>=7,<8",
+    "opensearch-py>=3.1,<4",
+    "opentelemetry-api>=1.38,<2",
+    "opentelemetry-sdk>=1.38,<2",
+    "opentelemetry-exporter-otlp>=1.38,<2",
+    "opentelemetry-instrumentation-fastapi>=0.59b0,<1",
+    "opentelemetry-instrumentation-aiokafka>=0.59b0,<1",
+    "opentelemetry-instrumentation-asyncpg>=0.59b0,<1",
+    "opentelemetry-instrumentation-redis>=0.59b0,<1",
+    "opentelemetry-instrumentation-requests>=0.59b0,<1",
+    "opentelemetry-instrumentation-sqlalchemy>=0.59b0,<1",
+    "opentelemetry-instrumentation-starlette>=0.59b0,<1",
+    # Logging
+    "structlog>=25.1",
+    # Configuration & utils
+    "python-dotenv>=1.0,<2",
+    "PyYAML>=6,<7",
+    "email-validator>=2.2,<3",
+    "Jinja2>=3.1,<4",
+    # CLI
+    "typer>=0.16,<1",
+    "fastapi-cli>=0.0.7,<1",
+]
+
+# Внутренняя py_main_lib ставится отдельно (private registry / локальный boilerplate)
+# и намеренно не указана здесь — см. CLAUDE.md → "Зависимости и окружение".
+
+[dependency-groups]
+dev = [
+    # Линт + форматирование (один инструмент вместо black/isort/autoflake/flake8)
+    "ruff>=0.9",
+    "mypy>=1.17,<2",
+    "pre-commit>=4.1,<5",
+    # Тесты
+    "pytest>=8.3,<9",
+    "pytest-asyncio>=0.25,<2",
+    "pytest-cov>=6,<8",
+    "pytest-dotenv>=0.5,<1",
+    "pytest-env>=1.1,<2",
+    "pytest-mock>=3.14,<4",
+    "coverage>=7.6,<8",
+    # Безопасность (G6)
+    "bandit>=1.8,<2",
+    "detect-secrets>=1.5,<2",
+    # Стабы для типизации
+    "types-psutil>=7",
+    "types-PyYAML>=6",
+]
+
+[tool.uv]
+# Это сервис, а не публикуемый пакет: uv только управляет окружением и lock-файлом.
+package = false
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "app/core/dao/db_helpers/migrations"]
+# B101 (assert) — допустимо вне продакшен-путей; остальное проверяется.
+skips = ["B101"]
+
+# --- Ruff: линт + сортировка импортов + форматирование -----------------------
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["app/core/dao/db_helpers/migrations/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes (включая неиспользуемые импорты — бывший autoflake)
+    "I",     # isort
+    "UP",    # pyupgrade — современный синтаксис
+    "B",     # bugbear — вероятные баги
+    "C4",    # comprehensions
+    "SIM",   # simplify
+    "D",     # pydocstyle
+    "ASYNC", # flake8-async — блокирующие вызовы в async-коде
+    "RUF",   # ruff-specific правила (ClassVar, dangling tasks, unused noqa)
+]
+ignore = [
+    # Docstring обязателен для каждого модуля, класса и функции (D1xx включены);
+    # послабления только по форме: пустая строка после докстринга, точка в конце,
+    # однострочность первой фразы.
+    "D202", "D205", "D415",
+    # Кириллица в докстрингах и комментариях — «неоднозначные» unicode-символы здесь норма.
+    "RUF001", "RUF002", "RUF003",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# Идиоматика FastAPI/FastStream: вызовы DI-маркеров в default-аргументах — норма.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Security",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.File",
+    "fastapi.Form",
+    "faststream.Context",
+    # Собственные фабрики зависимостей проекта
+    "app.core.security.security.auth_user",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+
+# --- Mypy (strict) ------------------------------------------------------------
+
+[tool.mypy]
+plugins = ['pydantic.mypy']
+exclude = ['.git', '__pycache__', 'migrations']
+# strict включает разом disallow_untyped_defs/calls, disallow_any_generics,
+# warn_return_any, warn_unused_ignores, no_implicit_reexport и остальной набор;
+# точечные послабления — только через overrides ниже.
+strict = true
+warn_unreachable = true
+extra_checks = true
+# Базовые классы (BaseService/BaseDAO/BaseEntityModel/ResponseV1) приходят из
+# py_main_lib без py.typed — наследование от них неизбежно наследует Any.
+disallow_subclassing_any = false
+
+[[tool.mypy.overrides]]
+# Внутренняя библиотека без py.typed-маркера — типы не раздаёт.
+module = "py_main_lib.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Декоратор FastStream `@router.subscriber(**kwargs)` теряет типы при распаковке
+# kwargs (subscriber_config) — сами хендлеры при этом полностью типизированы.
+module = ["app.brokers.kafka.subscribers"]
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+# hvac и aiokafka не публикуют стабы / py.typed.
+module = ["hvac.*", "aiokafka.*"]
+ignore_missing_imports = true
+
+# --- Pytest / coverage ---------------------------------------------------------
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+# Pytest-оверлей поверх стенда local; envs/test/ — деплой-стенд, к pytest отношения не имеет.
+env_files = ["envs/.test.env"]
+addopts = "-v"
+# Один event loop на всю сессию: engine/клиенты создаются на уровне модулей
+# и не переживают смену loop-а (раньше это делала кастомная фикстура event_loop).
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+markers = [
+    "no_db: тест не требует подключения к БД",
+]
+filterwarnings = [
+    "ignore::pluggy.PluggyTeardownRaisedWarning",
+]
+
+[tool.coverage.run]
+source = ["app"]
+
+[tool.coverage.report]
+show_missing = true
+# Порог качества: текущее покрытие ~78%, гейт с запасом на инфраструктурные ветки.
+fail_under = 75

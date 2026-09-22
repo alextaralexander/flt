@@ -1,0 +1,35 @@
+repos:
+  # Линт + сортировка импортов + форматирование — один инструмент (ruff)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.20
+    hooks:
+      - id: ruff-check
+        args: ["--fix"]
+      - id: ruff-format
+
+  # Проверка соответствия uv.lock ↔ pyproject.toml
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.8.13
+    hooks:
+      - id: uv-lock
+
+  # Security: статический анализ кода (G6)
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4
+    hooks:
+      - id: bandit
+        args: ["-c", "pyproject.toml"]
+        additional_dependencies: ["bandit[toml]"]
+        exclude: ^tests/
+
+  # Security: поиск утечек секретов (G6)
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: ^(uv\.lock|.*\.lock)$
+
+# mypy намеренно не в pre-commit: полноценный strict-прогон делает
+# `make typecheck` (локально в составе `make check`) и CI — без дублирования
+# ослабленной конфигурации в хуке.
