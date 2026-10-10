@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | proposed |
-| Версия | 0.2 |
+| Статус | accepted |
+| Версия | 1.0 |
 | Дата | 2026-10-10 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-10 (PR #2) |
 | Пункт(ы) BRD | все |
 | Модуль | все backend-модули и shared kernel (`app/core`) |
 | Зависимости | ADR-001 |
@@ -560,3 +560,4 @@ allow_indirect_imports = True
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | proposed |
 | 0.2 | 2026-10-10 | Claude | Согласование с ADR-003 (`RedisNamespace` → `ModuleRedis`, контракт на пакет `redis`), ADR-004 (префикс `/api/v1/<module>`, контракт «публикация только через outbox», `APP_ROLE`), ADR-007 и ADR-014 (контракт на клиенты хранилищ, пакеты `storage/` и `search/` в shared kernel); исключение `/api/v1/auth` для `identity` (`extra_prefixes`, тест `test_router_prefix_matches_module`) — решение оркестратора (OQ-12) | proposed |
+| 1.0 | 2026-10-10 | пользователь | Принят без изменений (PR #2, слияние в main) | accepted |

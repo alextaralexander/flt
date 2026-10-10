@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | proposed |
-| Версия | 0.2 |
+| Статус | accepted |
+| Версия | 1.0 |
 | Дата | 2026-10-10 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-10 (PR #2) |
 | Пункт(ы) BRD | все; прямо — STU-01, STU-03 (ключи учеников), VIS-03 (ключ модели платформы), VIS-04, VIS-05 (OAuth, SMTP, капча) |
 | Модуль | все; код — shared kernel (`configs/`), `identity`, `llm_gateway` |
 | Зависимости | нет |
@@ -237,3 +237,4 @@
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | proposed |
 | 0.2 | 2026-10-10 | Claude | Согласование с ADR-006 (Ed25519 PEM в `JWT_SIGNING_KEYS`, окно удаления `kid` = 600 с + leeway, `AUTH_CSRF_SECRET` — секрет, `JWT_PUBLIC_KEYS` — не секрет, без фиксированного ключа JWT в `envs/local`), ADR-007 (`S3_ACCESS_KEY`/`S3_SECRET_KEY`, `MINIO_KMS_SECRET_KEY`), ADR-010 и ADR-014 (`OPENSEARCH_BACKEND_PASSWORD` → `OPENSEARCH_PASSWORD`, `QDRANT_API_KEY`), ADR-015 (`LIVEKIT_API_KEY`/`SECRET`), ADR-010 (`TELEGRAM_ALERT_CHAT_ID`, OQ-60); фраза о правиле выбора chart-ов (SYS-11, OQ-28) | proposed |
+| 1.0 | 2026-10-10 | пользователь | Принят без изменений (PR #2, слияние в main) | accepted |
