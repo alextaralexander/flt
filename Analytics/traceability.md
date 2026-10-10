@@ -2,7 +2,7 @@
 
 > Связь BRD ↔ ТЗ ↔ тесты ↔ статус для каждого пункта бизнес-требований.
 > Основа: [FLT_BRD.md](BRD/FLT_BRD.md) и [SDD_plan.md](BRD/SDD_plan.md) (Приложение А, разделы этапов). Правила процесса: [CLAUDE.md](../CLAUDE.md).
-> Версия 0.2 от 2026-10-10, статус: **draft**.
+> Версия 0.3 от 2026-10-10, статус: **draft**.
 
 ## 1. Назначение
 
@@ -161,7 +161,7 @@
 
 ## 10. Системные спецификации и ADR
 
-Названия — из SDD_plan.md, разделы «Этап 1» и «Этап 7». Пути — по SDD_plan.md, раздел 2. Статус SYS ведётся по легенде статусов ТЗ, статус ADR — по легенде статусов ADR (раздел 4, значения по шаблону ADR).
+Названия — из SDD_plan.md, разделы «Этап 1» и «Этап 7». Пути — по SDD_plan.md, раздел 2. Статус SYS ведётся по легенде статусов ТЗ, статус ADR — по легенде статусов ADR (раздел 4, значения по шаблону ADR). Черновики ADR-001…ADR-015 написаны 2026-10-10 в ветке `spec/stage-1-adr` (статус `proposed`, версия 0.1 каждого); открытые вопросы, выявленные при их написании, — OQ-59…OQ-76 в `Analytics/open-questions.md`.
 
 | ID | Название | Этап | Путь | Статус |
 |---|---|---|---|---|
@@ -178,21 +178,21 @@
 | SYS-11 | Развёртывание | 1 | `Analytics/Specs/_system/SYS-11-deployment-and-environments.md` | — |
 | SYS-12 | CI/CD и качество | 1 | `Analytics/Specs/_system/SYS-12-ci-cd-and-quality.md` | — |
 | SYS-13 | Архитектура плагинов | 7 | `Analytics/Specs/_system/SYS-13-plugin-architecture.md` | — |
-| ADR-001 | Стек и политика версий (Python и FastAPI, React и TypeScript, переход на Python 3.14) | 1 | `Analytics/ADR/ADR-001-tech-stack.md` | — |
-| ADR-002 | Раскладка доменных модулей в boilerplate, скаффолдер, контроль границ модулей | 1 | `Analytics/ADR/ADR-002-module-layout.md` | — |
-| ADR-003 | Хранение состояния (PostgreSQL, Redis, крупные файлы) | 1 | `Analytics/ADR/ADR-003-state-storage.md` | — |
-| ADR-004 | Взаимодействие (REST, WebSocket, Kafka, outbox, роли API и воркера) | 1 | `Analytics/ADR/ADR-004-communication-patterns.md` | — |
-| ADR-005 | Frontend на основе bulletproof-react (версии, i18n и RTL, генерация клиента, покрытие) | 1 | `Analytics/ADR/ADR-005-frontend-stack.md` | — |
-| ADR-006 | Аутентификация и авторизация | 1 | `Analytics/ADR/ADR-006-authentication-and-authorization.md` | — |
-| ADR-007 | Файловое хранилище MinIO (S3) | 1 | `Analytics/ADR/ADR-007-file-storage.md` | — |
-| ADR-008 | Локальный агент | 1 | `Analytics/ADR/ADR-008-local-agent.md` | — |
-| ADR-009 | Стриминг ответов LLM через WebSocket, передача голоса | 1 | `Analytics/ADR/ADR-009-llm-streaming-and-voice.md` | — |
-| ADR-010 | Наблюдаемость | 1 | `Analytics/ADR/ADR-010-observability-stack.md` | — |
-| ADR-011 | CI/CD | 1 | `Analytics/ADR/ADR-011-ci-cd.md` | — |
-| ADR-012 | HAProxy как единая точка входа | 1 | `Analytics/ADR/ADR-012-haproxy-entry-point.md` | — |
-| ADR-013 | Секреты (Vault в Kubernetes, переменные окружения в docker-compose) | 1 | `Analytics/ADR/ADR-013-secrets-management.md` | — |
-| ADR-014 | Поиск (OpenSearch, Qdrant) | 1 | `Analytics/ADR/ADR-014-search-engines.md` | — |
-| ADR-015 | Медиасервер для видеосвязи на групповых занятиях | 1 (нужно к этапу 6) | `Analytics/ADR/ADR-015-media-server.md` | — |
+| ADR-001 | Стек и политика версий (Python и FastAPI, React и TypeScript, переход на Python 3.14) | 1 | `Analytics/ADR/ADR-001-tech-stack.md` | proposed |
+| ADR-002 | Раскладка доменных модулей в boilerplate, скаффолдер, контроль границ модулей | 1 | `Analytics/ADR/ADR-002-module-layout.md` | proposed |
+| ADR-003 | Хранение состояния (PostgreSQL, Redis, крупные файлы) | 1 | `Analytics/ADR/ADR-003-state-storage.md` | proposed |
+| ADR-004 | Взаимодействие (REST, WebSocket, Kafka, outbox, роли API и воркера) | 1 | `Analytics/ADR/ADR-004-communication-patterns.md` | proposed |
+| ADR-005 | Frontend на основе bulletproof-react (версии, i18n и RTL, генерация клиента, покрытие) | 1 | `Analytics/ADR/ADR-005-frontend-stack.md` | proposed |
+| ADR-006 | Аутентификация и авторизация | 1 | `Analytics/ADR/ADR-006-authentication-and-authorization.md` | proposed |
+| ADR-007 | Файловое хранилище MinIO (S3) | 1 | `Analytics/ADR/ADR-007-file-storage.md` | proposed |
+| ADR-008 | Локальный агент | 1 | `Analytics/ADR/ADR-008-local-agent.md` | proposed |
+| ADR-009 | Стриминг ответов LLM через WebSocket, передача голоса | 1 | `Analytics/ADR/ADR-009-llm-streaming-and-voice.md` | proposed |
+| ADR-010 | Наблюдаемость | 1 | `Analytics/ADR/ADR-010-observability-stack.md` | proposed |
+| ADR-011 | CI/CD | 1 | `Analytics/ADR/ADR-011-ci-cd.md` | proposed |
+| ADR-012 | HAProxy как единая точка входа | 1 | `Analytics/ADR/ADR-012-haproxy-entry-point.md` | proposed |
+| ADR-013 | Секреты (Vault в Kubernetes, переменные окружения в docker-compose) | 1 | `Analytics/ADR/ADR-013-secrets-management.md` | proposed |
+| ADR-014 | Поиск (OpenSearch, Qdrant) | 1 | `Analytics/ADR/ADR-014-search-engines.md` | proposed |
+| ADR-015 | Медиасервер для видеосвязи на групповых занятиях | 1 (нужно к этапу 6) | `Analytics/ADR/ADR-015-media-server.md` | proposed |
 
 ## 11. Сводка по этапам
 
