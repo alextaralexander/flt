@@ -3,8 +3,8 @@
 | Поле | Значение |
 |---|---|
 | Статус | draft |
-| Версия | 0.1 |
-| Дата | 2026-10-10 |
+| Версия | 0.2 |
+| Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | |
 | Пункт(ы) BRD | все |
@@ -46,7 +46,7 @@
 
 ### SYS-12-R2 Быстрая ступень на каждый push
 
-- **Формулировка**: На каждый push в PR и в `main` должны выполняться job-ы быстрой ступени с фильтром изменённых путей (`dorny/paths-filter` в job `changes`): `backend-quality` (`make format-check`, `make lint`, `make typecheck`, `make security`), `architecture` (`make arch`, `pytest tests/architecture`), `backend-tests` (`make test-cov` с `services:` PostgreSQL, Redis, MinIO), `frontend` (`pnpm install --frozen-lockfile`, `lint`, `format:check`, `check-types`, `i18n:check`, `api:check`, `test:cov`, `build`, `build-storybook`), `tools` (`uv run ruff check`, `mypy`, `pytest` в `src/tools`), `contracts` (Spectral и `flt-tools contracts check`), `docs` (`markdownlint`, `flt-tools specs check`, `flt-tools traceability check`), `commits` (`commitlint` и `flt-tools commits check` по коммитам PR); job, чьи пути не менялись, отчитывается `success` пустым шагом.
+- **Формулировка**: На каждый push в PR и в `main` должны выполняться job-ы быстрой ступени с фильтром изменённых путей (`dorny/paths-filter` в job `changes`): `backend-quality` (`make format-check`, `make lint`, `make typecheck`, `make security`), `architecture` (`make arch`, `pytest tests/architecture`), `backend-tests` (`make test-cov` с `services:` PostgreSQL, Redis, MinIO), `frontend` (`pnpm install --frozen-lockfile`, `lint`, `format:check`, `check-types`, `i18n:check`, `api:check`, `test:cov`, `build`, `build-storybook`), `tools` (`uv run ruff check`, `mypy`, `pytest` в `src/tools`), `contracts` (Spectral и `flt-tools contracts check`), `docs` (`markdownlint`, `flt-tools specs check`, `flt-tools traceability check`), `commits` (`commitlint` и `flt-tools commits check` по коммитам PR), `dependency-audit` (R35; при изменении lock-файлов, иначе `success` пустым шагом); job, чьи пути не менялись, отчитывается `success` пустым шагом.
 - **Обоснование**: ADR-011, раздел 3.1 (состав быстрой ступени и фильтр путей); CLAUDE.md «TDD»: «Все тесты запускаются в CI, красная сборка блокирует слияние». Job-ы `tools` и `commits` добавлены: пакет `flt_tools` должен проходить те же проверки, что бэкенд (ADR-011, раздел 3), а Conventional Commits (OQ-05) нуждаются в автоматической проверке.
 - **Проверка**: `src/tools/tests/test_workflows.py::test_fast_stage_jobs_present` (разбор `ci.yml`: имена job-ов, отсутствие условия `run_full` у них, шаги с перечисленными командами); `actionlint`.
 - **Применимость**: CI.
@@ -60,16 +60,16 @@
 
 ### SYS-12-R4 Обязательные проверки и защита `main`
 
-- **Формулировка**: Branch protection ветки `main` должна требовать успешного статуса проверок `ci-ok`, `backend-quality`, `architecture`, `backend-tests`, `frontend`, `tools`, `contracts`, `docs`, `commits`, `images`, `stand-n3`, `e2e`, `helm`, актуальности ветки («Require branches to be up to date»), одного одобрения ревьюера с отзывом устаревших одобрений, разрешения всех разговоров; прямые push и force push запрещены всем, включая администраторов; слияние — только merge commit; `ci-ok` должен падать, если при `run_full == true` любой тяжёлый job пропущен или упал.
+- **Формулировка**: Branch protection ветки `main` должна требовать успешного статуса проверок `ci-ok`, `backend-quality`, `architecture`, `backend-tests`, `frontend`, `tools`, `contracts`, `docs`, `commits`, `dependency-audit`, `images`, `stand-n3`, `e2e`, `helm`, актуальности ветки («Require branches to be up to date»), одного одобрения ревьюера с отзывом устаревших одобрений, разрешения всех разговоров; прямые push и force push запрещены всем, включая администраторов; слияние — только merge commit; `ci-ok` должен падать, если при `run_full == true` любой тяжёлый job пропущен или упал.
 - **Обоснование**: ADR-011, раздел 3.3; OQ-05 (resolved): `main` защищён, слияние merge-коммитом без squash на гейте G3.
 - **Проверка**: настройки GitHub выполняет пользователь по чек-листу `deploy/README.md` (раздел «Настройки репозитория»); автоматическая сверка — `flt-tools quality check-branch-protection` (вызов GitHub API `GET /repos/{owner}/{repo}/branches/main/protection` в job `docs` на `main` с `GITHUB_TOKEN`, сравнение со списком; падение — предупреждение в step summary, не ошибка, так как настройка вне репозитория); `test_workflows.py::test_ci_ok_depends_on_all_jobs`.
 - **Применимость**: CI, настройки репозитория (человек).
 
 ### SYS-12-R5 Момент перевода PR из draft в ready
 
-- **Формулировка**: PR фичи должен открываться черновиком на шаге 2 конвейера и переводиться в состояние ready на шаге 11 (E2E green — все тесты backend, frontend и E2E зелёные локально), до шага 12 (рефакторинг); первый полный прогон CI после перевода должен быть зелёным до начала рефакторинга, а рефакторинг (шаг 12) и последующие шаги выполняются при включённой тяжёлой ступени; досрочный полный прогон на черновике запускается меткой `ci:full`.
-- **Обоснование**: ADR-011 (раздел 3): правило принято пользователем 2026-10-10 с формулировкой «на шаге 8 (зелёный код)». В SDD_plan.md §5 шаг 8 — гейт G2 (ревью красных тестов), а зелёный код — шаги 9 (backend), 10 (frontend), 11 (E2E); перевод в ready на шаге 9 запускал бы тяжёлую ступень на заведомо красных frontend- и E2E-тестах и тратил бы минуты (ADR-011, раздел 2.1 B). Поэтому спецификация фиксирует номер шага по нумерации SDD_plan.md — 11, сохраняя смысл решения «после зелёного кода, до рефакторинга». Расхождение номера с ADR-011 отмечено в отчёте оркестратору для правки SDD_plan.md §5.
-- **Проверка**: шаблон PR (`.github/PULL_REQUEST_TEMPLATE.md`, R16) содержит чек-бокс «переведён в ready на шаге 11, полный прогон зелёный»; `flt-tools commits check` предупреждает, если событие `ready_for_review` произошло раньше первого коммита `feat`/`fix` с типом E2E green (`test(e2e)` или `feat` после `test`) — проверка информационная (step summary); ревью G3.
+- **Формулировка**: PR фичи должен открываться черновиком на шаге 2 конвейера и переводиться в состояние ready на шаге 9 («код backend green», SDD_plan.md §5); полный прогон тяжёлой ступени после перевода и после шагов 10 (frontend green) и 11 (E2E green) должен быть зелёным до начала рефакторинга (шаг 12), а рефакторинг и последующие шаги выполняются при включённой тяжёлой ступени; досрочный полный прогон на черновике запускается меткой `ci:full`.
+- **Обоснование**: ADR-011 (раздел 3, версия 1.1): правило принято пользователем 2026-10-10 — «PR переводится из draft в ready на шаге 9 конвейера (зелёный код), полный прогон ждётся до рефакторинга»; CLAUDE.md «Соглашения» и OQ-70. Тяжёлая ступень на шаге 9 может застать красные frontend- и E2E-тесты шагов 6–7 — это принятая цена раннего прогона стенда N3 для backend; до зелёного прогона после шага 11 PR не идёт на рефакторинг.
+- **Проверка**: шаблон PR (`.github/PULL_REQUEST_TEMPLATE.md`, R16) содержит чек-бокс «переведён в ready на шаге 9, полный прогон зелёный до рефакторинга»; `flt-tools commits check` предупреждает, если событие `ready_for_review` произошло раньше первого коммита `feat` шага 9 (backend green) — проверка информационная (step summary); ревью G3.
 - **Применимость**: процесс, CI.
 
 ### SYS-12-R6 Линтеры и типы backend
@@ -307,6 +307,41 @@
 - **Проверка**: тест `src/tools/tests/test_root_makefile.py::test_targets_present` (будет создан); `make check` и шаги job-ов используют одни и те же команды (таблица соответствия `precommit_map.toml`, R11).
 - **Применимость**: все.
 
+### SYS-12-R35 Аудит уязвимостей и лицензий зависимостей — job `dependency-audit`
+
+- **Формулировка**: `ci.yml` должен содержать job `dependency-audit` быстрой ступени, который запускается на PR с изменением `**/uv.lock`, `**/pnpm-lock.yaml`, `**/pyproject.toml`, `**/package.json`, на `main` и еженедельно в `nightly.yml`, и выполняет: `uv run pip-audit --strict` по `uv.lock` backend, `src/tools`, `src/protocol` и (с этапа 4) `src/agent`; `pnpm audit --prod --audit-level=high` в `src/frontend`; проверку лицензий (`pip-licenses --allow-only`, `pnpm licenses list --json` со скриптом `flt-tools quality licenses`, SYS-02-R59); уязвимость уровня high или critical с доступным исправлением — красная сборка; исключение — запись в `.github/audit-allowlist.yaml` (идентификатор уязвимости, пакет, причина, дата пересмотра не позже 30 дней) и строка раздела 6; просроченная запись — красная сборка.
+- **Обоснование**: SYS-02-R24 и R59 (аудит уязвимостей и лицензий, ASVS V14); ADR-001 (Renovate обновляет, аудит ловит то, что ещё не обновлено); ADR-011 (быстрая ступень и обязательные проверки).
+- **Проверка**: `test_workflows.py::test_dependency_audit_job` (будет создан): job есть в `ci.yml` и в `needs` у `ci-ok`, фильтр путей и расписание в `nightly.yml`; unit-тесты `flt-tools quality licenses` и разбора `audit-allowlist.yaml` (просроченная запись — ошибка).
+- **Применимость**: CI, backend, frontend, tools.
+
+### SYS-12-R36 Сканирование образов Trivy
+
+- **Формулировка**: job `images` должен после сборки сканировать образы `flt-backend`, `flt-frontend` и `flt-opensearch` (`aquasecurity/trivy-action`, пин по SHA, R12) с `--severity HIGH,CRITICAL --ignore-unfixed --exit-code 1`; находка — красная сборка; исключения — тот же файл `.github/audit-allowlist.yaml` (R35); отчёт SARIF загружается в GitHub code scanning; `release.yml` повторяет сканирование перед публикацией образов в GHCR.
+- **Обоснование**: SYS-02-R24 (Trivy для образов); базовые образы обновляет Renovate с меткой `deps:runtime` (ADR-001), а между обновлениями уязвимость в базовом образе должна останавливать релиз.
+- **Проверка**: `test_workflows.py::test_trivy_in_images_and_release` (будет создан); smoke: сборка с намеренно устаревшим базовым образом в `nightly.yml` падает на шаге Trivy.
+- **Применимость**: CI, deploy.
+
+### SYS-12-R37 Доступность и производительность интерфейса в E2E: axe и Lighthouse CI
+
+- **Формулировка**: job `e2e` должен (1) запускать проверку `@axe-core/playwright` с тегами `wcag2a`, `wcag2aa`, `wcag21aa`, `wcag22aa` на каждом ключевом экране SYS-02-R53 в проектах `chromium-desktop`, `chromium-mobile`, `ar`: нарушения `serious` и `critical` — красная сборка; (2) запускать Lighthouse CI (`@lhci/cli autorun`) по `src/frontend/lighthouserc.json` для стартовой страницы, страницы входа и экрана занятия на профиле «Mobile, Slow 4G» с бюджетами SYS-02-R5 (LCP ≤ 2,5 с, CLS ≤ 0,1, JavaScript первой загрузки ≤ 300 КиБ gzip; INP — по полевым данным, в CI не измеряется) и категорией `accessibility` ≥ 0,9; на этапе 1 нарушение бюджета Lighthouse — предупреждение в step summary, с этапа 2 — красная сборка (SYS-02-R5); отчёты — артефактами.
+- **Обоснование**: SYS-02-R5 (бюджеты производительности) и R53 (WCAG 2.2 AA); ADR-005 (Playwright, проекты E2E, Storybook с `addon-a11y`).
+- **Проверка**: `test_workflows.py::test_e2e_runs_axe_and_lighthouse` (будет создан); E2E-хелпер `e2e/support/axe.ts` с unit-тестом на отбор уровней; `lighthouserc.json` сверяется тестом `src/frontend/src/testing/architecture/lighthouse-budget.test.ts` с числами SYS-02-R5.
+- **Применимость**: CI, frontend.
+
+### SYS-12-R38 Сверочные команды `flt-tools`: права, модули, развёртывание
+
+- **Формулировка**: пакет `src/tools` должен предоставлять команды, которые CI выполняет как блокирующие шаги: `flt-tools permissions check` (job `docs`): матрица SYS-06 (таблицы раздела 3) совпадает с объединением `ModuleDefinition.permissions` реестра и с `PERMISSION_ACTIONS` — нет кода права в коде без строки матрицы и наоборот; `flt-tools modules check` (job `architecture`): список модулей `app/modules/registry.py` совпадает с таблицей 3.1 SYS-01 для модулей текущего этапа, порядок слоёв — с контрактом `modules-dependency-order` в `.importlinter`, каталоги `src/features/*` — с колонкой «Frontend-модуль» SYS-01; `flt-tools deploy parity` (job `helm`, SYS-11-R8): состав контейнеров, теги образов и переменные окружения docker-compose и Helm совпадают с таблицей SYS-11-R4.
+- **Обоснование**: CLAUDE.md «Модульный монолит» (изменение разбиения сначала в SYS-01, затем в коде), «Развёртывание» (оба варианта синхронны), «Разграничение ролей» (права на сервере); SYS-06-R3 (матрица в коде совпадает со спецификацией), SYS-01-R1 и R4, SYS-11-R8; ADR-011 (`src/tools` — пакет `flt_tools`, OQ-70).
+- **Проверка**: unit-тесты `src/tools/tests/test_permissions_check.py`, `test_modules_check.py`, `test_deploy_parity.py` (будут созданы) на эталонных расхождениях; `test_workflows.py::test_tools_checks_wired` (команды вызываются в указанных job-ах).
+- **Применимость**: CI, tools, backend, deploy.
+
+### SYS-12-R39 Обратная совместимость REST-контрактов: oasdiff
+
+- **Формулировка**: job `contracts` должен для каждого изменённого `Analytics/Specs/<module>/api/openapi.yaml` выполнять `oasdiff breaking` относительно версии файла в `main` (обёртка `flt-tools contracts check`); ломающее изменение без нового мажорного префикса пути (`/api/v2/...`) — красная сборка (SYS-03-R29); исключение — только по порядку раздела 6 SYS-03 (строка таблицы исключений и allowlist в `flt-tools contracts check`); новый файл контракта и модуль, у которого ещё нет `openapi.yaml` в `main`, проверку проходят.
+- **Обоснование**: SYS-03-R29 (совместимые и несовместимые изменения контракта); spec-first: сгенерированный клиент фронтенда и будущие мобильные клиенты не должны ломаться молча (ADR-005).
+- **Проверка**: unit-тест `src/tools/tests/test_contracts_breaking.py` (будет создан) на паре контрактов с удалённым полем ответа (ошибка) и добавленным необязательным полем (успех).
+- **Применимость**: CI, tools.
+
 ## 4. Влияние на модули и на шаблон ТЗ
 
 ### 4.1. Модули
@@ -327,7 +362,7 @@
 |---|---|
 | Шапка (статус, версия, история) | Подсказка: `flt-tools specs check` требует совпадения статуса и версии с последней строкой истории; `draft`/`review` не могут иметь тегов тестов (R15) |
 | 13. План тестов | Ссылка: матрица трассировки генерируется из тегов этого плана командой `make traceability` на шаге 14 (R14) |
-| 15. Definition of Done | Разделить пункты на «проверяет CI» и «проверяет человек» по таблице R16; добавить пункт «PR переведён в ready на шаге 11, полный прогон зелёный до рефакторинга» (R5) и «коммиты по шагам конвейера, `test` раньше `feat`» (R19) |
+| 15. Definition of Done | Разделить пункты на «проверяет CI» и «проверяет человек» по таблице R16; добавить пункт «PR переведён в ready на шаге 9, полный прогон зелёный до рефакторинга» (R5) и «коммиты по шагам конвейера, `test` раньше `feat`» (R19) |
 | 16. История изменений | Подсказка: запись при переводе в `implemented` делается в коммите `docs(<module>): <ID> …` шага 14 вместе с матрицей трассировки |
 
 ## 5. Примеры
@@ -452,7 +487,7 @@ jobs:
         run: docker compose -p flt down -v
 
   ci-ok:
-    needs: [changes, backend-quality, architecture, backend-tests, frontend, tools, contracts, docs, commits, images, stand-n3, e2e, helm]
+    needs: [changes, backend-quality, architecture, backend-tests, frontend, tools, contracts, docs, commits, dependency-audit, images, stand-n3, e2e, helm]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -637,7 +672,7 @@ STU-18 — Analytics/Specs/learning_plan/STU-18-learning-plan.md
 - [ ] метрики и события логов из раздела 9 ТЗ присутствуют в коде
 - [ ] docker-compose и Helm изменены согласованно по смыслу (если затронуто развёртывание)
 - [ ] `_module.md` обновлён, если менялся публичный API
-- [ ] PR переведён в ready на шаге 11 (все тесты зелёные), полный прогон был зелёным до рефакторинга
+- [ ] PR переведён в ready на шаге 9 (код backend green), полный прогон был зелёным до рефакторинга
 - [ ] тесты не ослаблены без изменения ТЗ (статус `changed`)
 ```
 
@@ -718,3 +753,4 @@ echo "SMOKE OK"
 | Версия | Дата | Автор | Что изменилось | Статус |
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
+| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R5 — перевод PR в ready на шаге 9 (ADR-011 v1.1, CLAUDE.md), а не на шаге 11, чек-боксы шаблона PR и раздела 4; R2, R4 и пример `ci-ok` — job `dependency-audit` в быстрой ступени и в обязательных проверках; новые R35 (`dependency-audit`: pip-audit, pnpm audit, лицензии), R36 (Trivy в `images` и `release.yml`), R37 (axe WCAG 2.2 AA и Lighthouse CI в `e2e`), R38 (`flt-tools permissions check`, `modules check`, `deploy parity`), R39 (oasdiff в `contracts`) | draft |
