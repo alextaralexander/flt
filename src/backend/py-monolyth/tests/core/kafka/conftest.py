@@ -1,4 +1,4 @@
-"""Fixture тестов outbox: временная схема модуля `core_outbox_test` с таблицей outbox (SYS-04-R24)."""
+"""Fixture тестов outbox и inbox: временная схема `core_outbox_test` с таблицами outbox и processed_events."""
 
 from collections.abc import AsyncIterator
 
@@ -7,6 +7,7 @@ from sqlalchemy import MetaData, Table, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.dao.db_helpers.base import module_metadata
+from app.core.kafka.inbox import processed_events_table
 from app.core.kafka.outbox import outbox_table
 from configs.settings import settings
 from tests.settings import test_settings
@@ -30,6 +31,7 @@ async def outbox(outbox_engine: AsyncEngine) -> AsyncIterator[Table]:
     """Таблица outbox в отдельной схеме: создаётся перед тестом и удаляется после."""
     metadata: MetaData = module_metadata(OUTBOX_SCHEMA)
     table = outbox_table(metadata)
+    processed_events_table(metadata)
     async with outbox_engine.begin() as connection:
         await connection.execute(text(f'DROP SCHEMA IF EXISTS "{OUTBOX_SCHEMA}" CASCADE'))
         await connection.execute(text(f'CREATE SCHEMA "{OUTBOX_SCHEMA}"'))
@@ -37,6 +39,13 @@ async def outbox(outbox_engine: AsyncEngine) -> AsyncIterator[Table]:
     yield table
     async with outbox_engine.begin() as connection:
         await connection.execute(text(f'DROP SCHEMA IF EXISTS "{OUTBOX_SCHEMA}" CASCADE'))
+
+
+@pytest_asyncio.fixture
+async def inbox(outbox: Table) -> Table:
+    """Таблица `processed_events` той же схемы (создаётся вместе с outbox)."""
+    assert outbox.metadata.schema is not None
+    return outbox.metadata.tables[f"{OUTBOX_SCHEMA}.processed_events"]
 
 
 @pytest_asyncio.fixture
