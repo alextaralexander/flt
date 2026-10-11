@@ -1,0 +1,158 @@
+# Оверлей стенда из N инстансов монолита за HAProxy (SYS-05-R44, ADR-011 job stand-n3, ADR-012).
+#
+# Запуск из корня репозитория (проект flt — SYS-11-R28; контейнеры flt-api-1…3, flt-worker-1…2):
+#   docker compose -p flt -f deploy/docker-compose/docker-compose.yml -f deploy/docker-compose/docker-compose.ci.yml \
+#     --profile ci up -d --wait --scale api=3
+# Из src/backend/py-monolyth: make test-n3 (поднять, pytest -m n_instances, погасить) или
+# make stand-up / make stand-test / make stand-down.
+#
+# Роли одного образа flt-backend (ADR-004): migrate (одноразово, до api и worker), api × 3 за HAProxy
+# (порт 8000 только в сети compose; диапазон 8000-8009 на loopback хоста — прямой доступ тестов к
+# инстансу, SYS-05-R46), worker × 2. HAProxy — та же конфигурация, что при развёртывании
+# (deploy/config/haproxy/haproxy.cfg), без TLS на :8080. Sticky-сессий нет.
+#
+# Секреты стенда — фиксированные тестовые значения CI (ADR-011 §3.6: «пароль PostgreSQL CI — несекретная
+# константа, помеченная как тестовая»); переопределяются переменными окружения. В Г.8 их заменяет
+# .env из deploy/scripts/gen-secrets.sh --ci (ADR-013).
+#
+# Сборка образа: если ghcr.io недоступен из сети сборки, образ сборочной стадии подменяется
+# переменной FLT_UV_IMAGE (любой образ с Python 3.14 и uv, см. src/backend/py-monolyth/Dockerfile).
+# Готовый образ без сборки: FLT_BACKEND_IMAGE=<тег> и `up --no-build`.
+#
+# Вне профиля ci (Г.8): frontend (Nginx), minio, mailpit, mock-oidc; OpenSearch, Qdrant, Prometheus,
+# Grafana и Fluent Bit в стенд N3 не входят (SYS-05 раздел 6).
+
+x-backend-build: &backend-build
+  context: ../../src/backend/py-monolyth
+  dockerfile: Dockerfile
+  additional_contexts:
+    py-main-lib: ../../src/backend/py-main-lib
+  args:
+    UV_IMAGE: ${FLT_UV_IMAGE:-ghcr.io/astral-sh/uv:python3.14-bookworm-slim}
+
+x-backend-environment: &backend-environment
+  # Стенд test: адреса сервисов — envs/test/*.env (postgres, redis, kafka:29092).
+  STAND_NAME: test
+  TZ: UTC
+  LOG_JSON_FORMAT: "true"
+  PG_USERNAME: flt
+  PG_PASSWORD: ${PG_PASSWORD:-flt_ci} # pragma: allowlist secret
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-flt_ci_redis} # pragma: allowlist secret
+  AUTH_CSRF_SECRET: ${AUTH_CSRF_SECRET:-flt-ci-csrf-secret-not-for-production} # pragma: allowlist secret
+
+services:
+  # Монолит «всё в одном» стенда local (базовый файл) в стенд N3 не входит: его заменяют роли ниже.
+  backend:
+    profiles: ["local"]
+
+  migrate:
+    image: ${FLT_BACKEND_IMAGE:-flt-backend:local}
+    build: *backend-build
+    environment:
+      <<: *backend-environment
+      APP_ROLE: migrate
+    restart: "no"
+    read_only: true
+    tmpfs: ["/tmp"]
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  api:
+    image: ${FLT_BACKEND_IMAGE:-flt-backend:local}
+    build: *backend-build
+    environment:
+      <<: *backend-environment
+      APP_ROLE: api
+    ports:
+      # Прямой доступ тестов к инстансу: docker compose -p flt port --index <n> api 8000 (SYS-05-R46).
+      - "127.0.0.1:8000-8009:8000"
+    read_only: true # SYS-05-R3: запись на диск инстанса невозможна
+    tmpfs: ["/tmp"]
+    stop_grace_period: 40s # SHUTDOWN_GRACE_SECONDS=30 + запас (SYS-05-R26, R39)
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import sys, urllib.request; sys.exit(urllib.request.urlopen('http://127.0.0.1:8000/v1/ready', timeout=2).status != 200)"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+      start_interval: 1s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    image: ${FLT_BACKEND_IMAGE:-flt-backend:local}
+    build: *backend-build
+    environment:
+      <<: *backend-environment
+      APP_ROLE: worker
+    deploy:
+      replicas: 2
+    read_only: true
+    tmpfs: ["/tmp"]
+    stop_grace_period: 40s
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import sys, urllib.request; sys.exit(urllib.request.urlopen('http://127.0.0.1:8001/v1/ready', timeout=2).status != 200)"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+      start_interval: 1s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  haproxy:
+    image: haproxy:3.2-alpine
+    environment:
+      API_HOST: api
+      # На стенде CI документация открыта и X-Instance-Id не снимается (SYS-05-R5).
+      FLT_EXPOSE_DOCS: "1"
+    volumes:
+      - ../config/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "127.0.0.1:8080:8080" # fe_plain без TLS (ADR-012); 8404 — только в сети compose
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8404/stats;csv"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      api:
+        condition: service_healthy
+
+  postgres:
+    command: ["postgres", "-c", "max_connections=200"]
+    environment:
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-flt_ci} # pragma: allowlist secret
+
+  redis:
+    # Пароль обязателен вне стенда local (ADR-013); база 0 — стенд, тестов pytest здесь нет.
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-flt_ci_redis}", "--save", "", "--appendonly", "no"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-flt_ci_redis} # pragma: allowlist secret
+
+  kafka:
+    environment:
+      # Топики создаёт роль migrate по декларациям модулей (ADR-004, Г.4); автосоздание — только local.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"

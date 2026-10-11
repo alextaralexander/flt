@@ -4,8 +4,12 @@
 #   docker build --build-context py-main-lib=../py-main-lib .
 # В docker-compose контекст задан в deploy/docker-compose/docker-compose.yml (additional_contexts).
 
+# Образ сборочной стадии (Python 3.14 + uv). Переопределяется, если ghcr.io недоступен из сети
+# сборки: --build-arg UV_IMAGE=<образ с python3.14 и uv> (в compose — переменная FLT_UV_IMAGE).
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+
 # --- Стадия 1: сборка окружения из uv.lock ----------------------------------
-FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
+FROM ${UV_IMAGE} AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
