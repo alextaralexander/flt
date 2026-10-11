@@ -1,66 +1,35 @@
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 88
-include_trailing_comma = true
-lines_after_imports = 2
-lines_between_types = 0
-use_parentheses = true
-
-[tool.black]
-line-length = 120
-
-[tool.mypy]
-plugins = ['pydantic.mypy']
-exclude = ['.git', '__pycache__', 'migrations']
-disallow_untyped_defs = true
-disallow_untyped_calls = true
-disallow_incomplete_defs = true
-warn_incomplete_stub = true
-disallow_any_generics = true
-warn_unused_configs = true
-warn_unreachable = true
-extra_checks = true
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["py_main_lib/tests"]
-pythonpath = ["app"]
-env_files = ["py_main_lib/tests/.test.env"]
-addopts = "-v"
-asyncio_default_fixture_loop_scope = "function"
-filterwarnings = ["ignore::DeprecationWarning"]
-
-[tool.autoflake]
-remove-all-unused-imports = true
-in-place = true
-recursive = true
-
-[tool.flake8]
-max-line-length = 120
-exclude = [""]
-per-file-ignores = [
-    # docstrings for module
-    "*/__init__.py:D104"
+[project]
+name = "py-main-lib"
+version = "0.1.0"
+description = "Внутренняя библиотека монолита FLT: базовые DAO/сервисы, фильтры, схемы ответов, проверка прав."
+requires-python = ">=3.12"
+# Диапазоны, совместимые с монолитом (src/backend/py-monolyth/pyproject.toml); точные версии
+# фиксирует uv.lock монолита — библиотека подключается к нему как path-зависимость uv (ADR-001, OQ-69).
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "pydantic>=2.10,<3",
+    "SQLAlchemy[asyncio]>=2.0.29,<2.1",
+    "alembic>=1.14,<2",
+    "redis>=5.2,<7",
+    "PyJWT>=2.10,<3",
+    "httpx>=0.28,<1",
+    "typing-extensions>=4.12",
 ]
 
-no-accept-encodings = true
-inline-quotes = "double"
-ignore = [
-    # Cxxx - Handled by black
-    "C8",
-    # Dxxx - Docstrings
-    "D101", "D102", "D103", "D106", "D107", "D202",
-    # Exxx - Black handles whitespace before ':'
-    "E203", "W503",
-    # Sxxx - Security-related warnings
-    "S101", "S702",
-    # WPSxxx - wemake-python-styleguide rules
-    "WPS115", "WPS202", "WPS214", "WPS226", "WPS305", "WPS306",
-    "WPS316", "WPS326", "WPS332", "WPS348", "WPS404",
-    # Custom additional ignores
-    "WPS118", "WPS324", "WPS229", "WPS232", "WPS331",
-    "WPS231", "WPS420", "E266", "N815", "E800",
-    "WPS604", "WPS440", "WPS432", "WPS510", "WPS337",
-    "WPS454", "WPS237", "WPS221", "WPS428", "WPS504",
-]
+[project.optional-dependencies]
+# Цветной консольный логгер (`py_main_lib.colored_logger`) — монолитом не используется.
+colored-logger = ["colorlog>=6.9,<7"]
+# Клиент внешнего сервиса прав (`py_main_lib.security.permission_service`) — монолитом не используется.
+permission-service = ["requests>=2.32,<3"]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["py_main_lib"]
+# Фикстуры pytest библиотеки в колесо не попадают: монолиту они не нужны.
+exclude = ["py_main_lib/tests"]
+
+[tool.hatch.build.targets.sdist]
+include = ["py_main_lib", "README.md"]

@@ -8,7 +8,7 @@ RUN ?= uv run
 COMPOSE_FILE ?= ../../../deploy/docker-compose/docker-compose.yml
 # Инфраструктура для запуска сервиса на хосте (сам сервис в compose — сервис `backend`).
 COMPOSE_INFRA ?= postgres redis kafka
-# Локальный путь до py-main-lib (private registry недоступен — ставим из соседнего клона).
+# Путь до py-main-lib: path-зависимость uv (pyproject.toml) и build-context Docker-образа.
 PY_MAIN_LIB ?= ../py-main-lib
 
 .DEFAULT_GOAL := help
@@ -24,13 +24,8 @@ help: ## Показать список доступных команд
 
 # --- Окружение и зависимости (G8: uv) --------------------------------------
 
-install: ## Установить зависимости из uv.lock (uv sync + py-main-lib)
+install: ## Установить зависимости из uv.lock (py-main-lib — path-зависимость uv)
 	uv sync --all-groups
-	@if [ -d "$(PY_MAIN_LIB)" ]; then \
-		uv pip install --no-deps "$(PY_MAIN_LIB)"; \
-	else \
-		echo "py-main-lib не найден в $(PY_MAIN_LIB) — установи из private registry (см. CLAUDE.md)"; \
-	fi
 
 lock: ## Пересобрать uv.lock из pyproject.toml
 	uv lock
@@ -132,7 +127,7 @@ compose-up: ## Поднять локальную инфраструктуру (P
 compose-down: ## Остановить локальную инфраструктуру
 	docker compose -f $(COMPOSE_FILE) down
 
-docker-build: ## Собрать Docker-образ сервиса (py-main-lib из локального клона)
+docker-build: ## Собрать Docker-образ сервиса (py-main-lib — build-context)
 	docker build --build-context py-main-lib=$(PY_MAIN_LIB) -t flt-backend:local .
 
 clean: ## Удалить кэши и временные артефакты

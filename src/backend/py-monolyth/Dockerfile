@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
-# py-main-lib берётся из build-context-а (private registry недоступен):
+# py-main-lib — path-зависимость uv (`../py-main-lib` в pyproject.toml); в образ она попадает
+# из build-context-а и кладётся в /py-main-lib, чтобы относительный путь из uv.lock совпал:
 #   docker build --build-context py-main-lib=../py-main-lib .
 # В docker-compose контекст задан в deploy/docker-compose/docker-compose.yml (additional_contexts).
 
@@ -12,16 +13,12 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# Сначала только манифесты: слой зависимостей кэшируется между сборками.
+# Сначала только манифесты и py-main-lib: слой зависимостей кэшируется между сборками.
+# WORKDIR /app, поэтому `../py-main-lib` из uv.lock — это /py-main-lib.
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
-
-# Внутренняя py-main-lib из build-context-а `py-main-lib` (ставится без своих пинов —
-# версии зависимостей контролирует uv.lock сервиса).
 COPY --from=py-main-lib . /py-main-lib
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --no-deps /py-main-lib
+    uv sync --frozen --no-dev
 
 COPY . .
 

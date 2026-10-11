@@ -56,10 +56,9 @@ dependencies = [
     # CLI
     "typer>=0.16,<1",
     "fastapi-cli>=0.0.7,<1",
+    # Внутренняя библиотека: path-зависимость uv (ADR-001, OQ-69), её зависимости учитывает uv.lock.
+    "py-main-lib",
 ]
-
-# Внутренняя py_main_lib ставится отдельно (private registry / локальный boilerplate)
-# и намеренно не указана здесь — см. CLAUDE.md → "Зависимости и окружение".
 
 [dependency-groups]
 dev = [
@@ -86,6 +85,10 @@ dev = [
 [tool.uv]
 # Это сервис, а не публикуемый пакет: uv только управляет окружением и lock-файлом.
 package = false
+
+[tool.uv.sources]
+# py-main-lib правится в этом репозитории и ставится из соседней папки (в Docker — из build-context-а).
+py-main-lib = { path = "../py-main-lib" }
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "app/core/dao/db_helpers/migrations"]

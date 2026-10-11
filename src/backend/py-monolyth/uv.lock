@@ -1424,6 +1424,36 @@ wheels = [
 ]
 
 [[package]]
+name = "py-main-lib"
+version = "0.1.0"
+source = { directory = "../py-main-lib" }
+dependencies = [
+    { name = "alembic" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pyjwt" },
+    { name = "redis" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "typing-extensions" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "alembic", specifier = ">=1.14,<2" },
+    { name = "colorlog", marker = "extra == 'colored-logger'", specifier = ">=6.9,<7" },
+    { name = "fastapi", specifier = ">=0.115,<1.0" },
+    { name = "httpx", specifier = ">=0.28,<1" },
+    { name = "pydantic", specifier = ">=2.10,<3" },
+    { name = "pyjwt", specifier = ">=2.10,<3" },
+    { name = "redis", specifier = ">=5.2,<7" },
+    { name = "requests", marker = "extra == 'permission-service'", specifier = ">=2.32,<3" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.29,<2.1" },
+    { name = "typing-extensions", specifier = ">=4.12" },
+]
+provides-extras = ["colored-logger", "permission-service"]
+
+[[package]]
 name = "pycparser"
 version = "3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1664,6 +1694,7 @@ dependencies = [
     { name = "opentelemetry-sdk" },
     { name = "prometheus-client" },
     { name = "psutil" },
+    { name = "py-main-lib" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
@@ -1724,6 +1755,7 @@ requires-dist = [
     { name = "opentelemetry-sdk", specifier = ">=1.38,<2" },
     { name = "prometheus-client", specifier = ">=0.21,<1" },
     { name = "psutil", specifier = ">=7,<8" },
+    { name = "py-main-lib", directory = "../py-main-lib" },
     { name = "pydantic", specifier = ">=2.10,<3" },
     { name = "pydantic-settings", specifier = ">=2.7,<3" },
     { name = "pyjwt", specifier = ">=2.10,<3" },

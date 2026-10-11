@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Dev-сборка: py-main-lib берётся из локального build-context-а:
+# Dev-сборка: py-main-lib (path-зависимость uv) берётся из build-context-а:
 #   docker build -f Dockerfile-dev --build-context py-main-lib=../py-main-lib .
 
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
@@ -11,12 +11,9 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --all-groups
-
 COPY --from=py-main-lib . /py-main-lib
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --no-deps /py-main-lib
+    uv sync --frozen --all-groups
 
 COPY . .
 
