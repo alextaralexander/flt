@@ -188,3 +188,50 @@ class TestHealthcheck:
         # - Assert -
         assert code == 0
         assert requested == [f"http://127.0.0.1:{settings.FAST_API_PORT}/v1/health"]
+
+
+@pytest.mark.req("SYS-04-R28")
+class TestDlqCommands:
+    """`python -m app dlq list|replay` — разбор DLQ вручную."""
+
+    def test_list_and_replay(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+        """Аргументы командной строки передаются в функции DLQ, результат печатается."""
+        # - Arrange -
+        calls: list[tuple[str, dict[str, Any]]] = []
+
+        async def fake_list(topic: str, **kwargs: Any) -> list[dict[str, Any]]:
+            calls.append(("list", {"topic": topic, **kwargs}))
+            return [{"event_id": "e1"}]
+
+        async def fake_replay(topic: str, **kwargs: Any) -> list[str]:
+            calls.append(("replay", {"topic": topic, **kwargs}))
+            return ["e1"]
+
+        monkeypatch.setattr(entrypoint, "list_dlq", fake_list)
+        monkeypatch.setattr(entrypoint, "replay_dlq", fake_replay)
+
+        # - Act -
+        listed = entrypoint.main(["dlq", "list", "--topic", "flt.m.x.v1"])
+        replayed = entrypoint.main(
+            ["dlq", "replay", "--topic", "flt.m.x.v1", "--event-id", "e1", "--dry-run", "--consumer", "m.h"]
+        )
+
+        # - Assert -
+        assert (listed, replayed) == (0, 0)
+        assert calls == [
+            ("list", {"topic": "flt.m.x.v1", "since": None}),
+            (
+                "replay",
+                {"topic": "flt.m.x.v1", "event_ids": ["e1"], "consumer": "m.h", "dry_run": True, "force": False},
+            ),
+        ]
+        assert "e1" in capsys.readouterr().out
+
+    def test_replay_limit_returns_error_code(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Превышение лимита повторов без `--force` — код возврата 1."""
+
+        async def limited(topic: str, **kwargs: Any) -> list[str]:
+            raise entrypoint.DlqReplayLimitError("limit")
+
+        monkeypatch.setattr(entrypoint, "replay_dlq", limited)
+        assert entrypoint.main(["dlq", "replay", "--topic", "flt.m.x.v1"]) == 1

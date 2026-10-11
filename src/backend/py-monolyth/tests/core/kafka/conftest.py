@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.dao.db_helpers.base import module_metadata
 from app.core.kafka.inbox import processed_events_table
+from app.core.kafka.jobs import jobs_table
 from app.core.kafka.outbox import outbox_table
 from configs.settings import settings
 from tests.settings import test_settings
@@ -32,6 +33,7 @@ async def outbox(outbox_engine: AsyncEngine) -> AsyncIterator[Table]:
     metadata: MetaData = module_metadata(OUTBOX_SCHEMA)
     table = outbox_table(metadata)
     processed_events_table(metadata)
+    jobs_table(metadata)
     async with outbox_engine.begin() as connection:
         await connection.execute(text(f'DROP SCHEMA IF EXISTS "{OUTBOX_SCHEMA}" CASCADE'))
         await connection.execute(text(f'CREATE SCHEMA "{OUTBOX_SCHEMA}"'))
@@ -46,6 +48,12 @@ async def inbox(outbox: Table) -> Table:
     """Таблица `processed_events` той же схемы (создаётся вместе с outbox)."""
     assert outbox.metadata.schema is not None
     return outbox.metadata.tables[f"{OUTBOX_SCHEMA}.processed_events"]
+
+
+@pytest_asyncio.fixture
+async def jobs(outbox: Table) -> Table:
+    """Таблица `jobs` той же схемы."""
+    return outbox.metadata.tables[f"{OUTBOX_SCHEMA}.jobs"]
 
 
 @pytest_asyncio.fixture
