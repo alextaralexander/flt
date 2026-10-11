@@ -184,8 +184,8 @@ def create_worker_app(
     async def start_relays() -> None:
         """Relay outbox для каждого модуля с outbox и планировщик задач — после подключения брокера."""
         relay_stop.clear()
-        if any(module.schedules for module in resolved):
-            scheduler = Scheduler(resolved, ModuleRedis("shared_kernel"), get_session_maker())
+        scheduler = Scheduler(resolved, ModuleRedis("shared_kernel"), get_session_maker())
+        if scheduler.entries:
             relay_tasks.append(asyncio.create_task(scheduler.run(relay_stop), name="scheduler"))
         for module in resolved:
             if module.outbox is None:

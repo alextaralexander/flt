@@ -96,10 +96,12 @@ class Scheduler:
         """Собирает задачи модулей и их журналы запусков."""
         self.redis = redis
         self.session_maker = session_maker
+        from app.core.kafka.cleanup import delivery_cleanup_schedules
+
         self.entries: list[tuple[str, ScheduleDeclaration, Table | None]] = [
             (module.name, schedule, module.metadata.tables.get(f"{module.name}.scheduled_runs"))
             for module in modules
-            for schedule in module.schedules
+            for schedule in (*module.schedules, *delivery_cleanup_schedules(module, session_maker))
         ]
 
     async def tick(self, now: datetime | None = None) -> None:
