@@ -18,12 +18,58 @@ def uvicorn_calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[Any, dict[str, 
     """Подменяет `uvicorn.run`: тест получает приложение и параметры запуска без открытия сокета."""
     calls: list[tuple[Any, dict[str, Any]]] = []
     monkeypatch.setattr(entrypoint.uvicorn, "run", lambda app, **kwargs: calls.append((app, kwargs)))
+
+    def run_api_server(server: entrypoint.ApiServer) -> None:
+        """Роли `api` и `all` запускаются через `ApiServer` (закрытие `/ws` с причиной при остановке)."""
+        config = server.config
+        calls.append(
+            (
+                config.app,
+                {
+                    "port": config.port,
+                    "proxy_headers": config.proxy_headers,
+                    "forwarded_allow_ips": config.forwarded_allow_ips,
+                    "timeout_graceful_shutdown": config.timeout_graceful_shutdown,
+                },
+            )
+        )
+
+    monkeypatch.setattr(entrypoint.ApiServer, "run", run_api_server)
     return calls
 
 
 def _use_role(monkeypatch: pytest.MonkeyPatch, role: AppRole) -> None:
     """Задаёт роль процесса в настройках на время теста."""
     monkeypatch.setattr(settings, "APP_ROLE", role)
+
+
+class _RecordingHub:
+    """Хаб-проба: записывает момент остановки."""
+
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+
+    async def stop(self) -> None:
+        self.events.append("hub.stop")
+
+
+@pytest.mark.req("SYS-04-R18")
+async def test_api_server_closes_websockets_before_uvicorn_shutdown(monkeypatch: pytest.MonkeyPatch) -> None:
+    """При остановке `ApiServer` сначала закрывает `/ws` с причиной `instance_shutdown`, затем uvicorn — свои."""
+    # - Arrange -
+    events: list[str] = []
+
+    async def uvicorn_shutdown(self: Any, sockets: Any = None) -> None:
+        events.append("uvicorn.shutdown")
+
+    monkeypatch.setattr(entrypoint.uvicorn.Server, "shutdown", uvicorn_shutdown)
+    server = entrypoint.ApiServer(entrypoint.uvicorn.Config(FastAPI()), _RecordingHub(events))  # type: ignore[arg-type]
+
+    # - Act -
+    await server.shutdown()
+
+    # - Assert -
+    assert events == ["hub.stop", "uvicorn.shutdown"]
 
 
 class TestRoles:

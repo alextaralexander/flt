@@ -111,13 +111,17 @@ STAND_SCALE ?= 3
 STAND_URL ?= http://127.0.0.1:8080
 # --build собирает образ flt-backend; готовый образ: STAND_UP_FLAGS=--no-build FLT_BACKEND_IMAGE=<тег>.
 STAND_UP_FLAGS ?= --build
+# Пара ключей JWT стенда (tests/support/stand_keys.py): стенд получает только публичный ключ.
+STAND_KEYS ?= .stand/jwt-keys.json
 STAND_COMPOSE = docker compose -p $(STAND_PROJECT) -f $(COMPOSE_FILE) -f $(COMPOSE_DIR)/docker-compose.ci.yml --profile ci
 
 stand-up: ## Поднять стенд N3: migrate, api × 3 за HAProxy (:8080), worker × 2, PostgreSQL, Redis, Kafka
-	$(STAND_COMPOSE) up -d --wait $(STAND_UP_FLAGS) --scale api=$(STAND_SCALE)
+	FLT_STAND_JWT_PUBLIC_KEYS='$(shell $(RUN) python -m tests.support.stand_keys public $(STAND_KEYS) 2>/dev/null)' \
+		$(STAND_COMPOSE) up -d --wait $(STAND_UP_FLAGS) --scale api=$(STAND_SCALE)
 
 stand-test: ## Тесты масштабируемости на поднятом стенде: pytest -m n_instances --stand-url $(STAND_URL)
-	$(RUN) pytest -m n_instances tests/n_instances --stand-url $(STAND_URL) --stand-project $(STAND_PROJECT)
+	FLT_STAND_KEYS=$(STAND_KEYS) $(RUN) pytest -m n_instances tests/n_instances --stand-url $(STAND_URL) \
+		--stand-project $(STAND_PROJECT)
 
 stand-logs: ## Логи контейнеров стенда N3
 	$(STAND_COMPOSE) logs --no-color --timestamps

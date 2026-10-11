@@ -19,7 +19,7 @@
 # переменной FLT_UV_IMAGE (любой образ с Python 3.14 и uv, см. src/backend/py-monolyth/Dockerfile).
 # Готовый образ без сборки: FLT_BACKEND_IMAGE=<тег> и `up --no-build`.
 #
-# Вне профиля ci (Г.8): frontend (Nginx), minio, mailpit, mock-oidc; OpenSearch, Qdrant, Prometheus,
+# Вне профиля ci (Г.8): frontend (Nginx), mailpit, mock-oidc; OpenSearch, Qdrant, Prometheus,
 # Grafana и Fluent Bit в стенд N3 не входят (SYS-05 раздел 6).
 
 x-backend-build: &backend-build
@@ -39,6 +39,9 @@ x-backend-environment: &backend-environment
   PG_PASSWORD: ${PG_PASSWORD:-flt_ci} # pragma: allowlist secret
   REDIS_PASSWORD: ${REDIS_PASSWORD:-flt_ci_redis} # pragma: allowlist secret
   AUTH_CSRF_SECRET: ${AUTH_CSRF_SECRET:-flt-ci-csrf-secret-not-for-production} # pragma: allowlist secret
+  # Публичный ключ проверки JWT стенда: пару создаёт `make stand-up` (tests/support/stand_keys.py),
+  # приватный ключ остаётся у тестов. Пусто — токены не принимаются (WebSocket-тесты не пройдут).
+  JWT_PUBLIC_KEYS: ${FLT_STAND_JWT_PUBLIC_KEYS:-}
 
 services:
   # Монолит «всё в одном» стенда local (базовый файл) в стенд N3 не входит: его заменяют роли ниже.

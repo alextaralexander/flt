@@ -17,6 +17,7 @@
 import argparse
 import asyncio
 import json
+import socket
 import sys
 import urllib.request
 from collections.abc import Sequence
@@ -31,6 +32,7 @@ from app.core.kafka.topics_admin import apply_topics
 from app.core.logging import app_logger, logger_settings
 from app.core.modules import load_modules
 from app.core.storage.init import init_storage
+from app.core.ws.hub import WsHub
 from app.main import create_app, create_worker_app
 from app.modules.registry import MODULES
 from configs.settings import AppRole, settings
@@ -42,10 +44,30 @@ HEALTHCHECK_TIMEOUT_SECONDS = 3
 WORKER_PORT_ROLES = frozenset({AppRole.WORKER, AppRole.MEDIA_AGENT})
 
 
+class ApiServer(uvicorn.Server):
+    """uvicorn роли `api`: при остановке сначала закрывает `/ws` кодом 1012 `instance_shutdown`.
+
+    Сам uvicorn при SIGTERM закрывает WebSocket кодом 1012 без причины ещё до lifespan shutdown;
+    хаб закрывает соединения раньше, с причиной из таблицы SYS-04-R10 (SYS-04-R18, SYS-05-R26).
+    """
+
+    def __init__(self, config: uvicorn.Config, hub: WsHub | None) -> None:
+        """Сервер с хабом WebSocket приложения."""
+        super().__init__(config)
+        self.hub = hub
+
+    async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
+        """Закрытие соединений хаба, затем штатная остановка uvicorn."""
+        if self.hub is not None:
+            await self.hub.stop()
+        await super().shutdown(sockets)
+
+
 def run_api(role: AppRole) -> None:
     """Запускает HTTP-приложение (роли `api` и `all`) за HAProxy: доверие X-Forwarded-* (ADR-012)."""
-    uvicorn.run(
-        create_app(role=role),
+    application = create_app(role=role)
+    config = uvicorn.Config(
+        application,
         host=settings.FAST_API_HOST,
         port=settings.FAST_API_PORT,
         proxy_headers=True,
@@ -53,6 +75,7 @@ def run_api(role: AppRole) -> None:
         timeout_graceful_shutdown=settings.SHUTDOWN_GRACE_SECONDS,
         log_config=None,
     )
+    ApiServer(config, getattr(application.state, "ws_hub", None)).run()
 
 
 def run_worker() -> None:
