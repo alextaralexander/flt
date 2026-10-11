@@ -140,6 +140,11 @@ class Settings(BaseSettings):
     ALLOW_HEADERS: list[str] = Field(
         description="Список разрешённых HTTP-заголовков (CORS Allow-Headers).",
     )
+    HTTP_MAX_JSON_BODY_BYTES: int = Field(
+        default=1024 * 1024,
+        gt=0,
+        description="Максимальный размер тела запроса, байт; больше — 413 core.payload_too_large (SYS-03-R26).",
+    )
 
     # OpenTelemetry: экспорт трейсов выключен до этапа 4 (ADR-010, OQ-20).
     OTLP_EXPORTER_ENDPOINT: str = Field(
