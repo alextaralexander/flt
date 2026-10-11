@@ -17,6 +17,10 @@ from app.core.modules import ModuleDefinition, module_kafka_routers
 from configs.kafka_config import kafka_settings
 
 
+# Продюсер relay outbox: подтверждение всеми репликами и идемпотентность (SYS-04-R24).
+PRODUCER_SETTINGS = {"acks": "all", "enable_idempotence": True}
+
+
 def create_broker(modules: Sequence[ModuleDefinition] = (), role: str = "worker") -> KafkaBroker:
     """Создаёт брокер Kafka и подключает к нему Kafka-роутеры модулей.
 
@@ -31,6 +35,8 @@ def create_broker(modules: Sequence[ModuleDefinition] = (), role: str = "worker"
         kafka_settings.KAFKA_BOOTSTRAP_SERVERS,
         client_id=kafka_settings.client_id(role),
         max_request_size=kafka_settings.KAFKA_MAX_REQUEST_SIZE,
+        acks="all",
+        enable_idempotence=True,
         logger=None,
         # Трейсы и метрики сообщений — встроенный middleware FastStream (провайдер OTel — глобальный).
         middlewares=[KafkaTelemetryMiddleware()],
