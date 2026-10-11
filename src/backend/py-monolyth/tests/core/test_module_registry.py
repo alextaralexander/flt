@@ -11,7 +11,7 @@ from fastapi import APIRouter
 from sqlalchemy import MetaData
 
 from app.core.captcha import CaptchaProvider, StubCaptchaProvider
-from app.core.container import container
+from app.core.container import ServiceBinding, container
 from app.core.extensions import ExtensionContribution, ExtensionPoint, ExtensionRegistrationError, ExtensionRegistry
 from app.core.mail import MailClient, SmtpMailClient
 from app.core.modules import ModuleDefinition, ModuleLoadError, ModuleRegistry, install_modules, load_modules
@@ -192,3 +192,56 @@ def test_install_registers_kernel_services() -> None:
     assert isinstance(container.resolve(TokenVerifier), TokenVerifier)
     assert isinstance(container.resolve(MailClient), SmtpMailClient)
     assert isinstance(container.resolve(CaptchaProvider), StubCaptchaProvider)
+
+
+@runtime_checkable
+class GreeterService(Protocol):
+    """Сервис модуля `alpha` для проверки `provides`."""
+
+    def greet(self) -> str:
+        """Приветствие."""
+        ...
+
+
+class AlphaGreeter:
+    """Реализация `GreeterService` модуля `alpha`."""
+
+    def greet(self) -> str:
+        """Приветствие модуля `alpha`."""
+        return "alpha"
+
+
+@pytest.mark.req("SYS-01-R6")
+class TestProvides:
+    """`ModuleDefinition.provides` — реализации `Protocol` модуля для контейнера (ADR-004, раздел 2.6; OQ-86)."""
+
+    @pytest.mark.usefixtures("clean_container")
+    def test_install_registers_provided_services(self) -> None:
+        """`install_modules` регистрирует фабрики модуля; `resolve` создаёт новый объект на каждый вызов."""
+        # - Arrange -
+        registry = ModuleRegistry.build([_module("alpha", provides=(ServiceBinding(GreeterService, AlphaGreeter),))])
+
+        # - Act -
+        install_modules(registry)
+
+        # - Assert -
+        first = container.resolve(GreeterService)
+        assert first.greet() == "alpha"
+        assert container.resolve(GreeterService) is not first
+
+    def test_same_protocol_from_two_modules_stops_start(self) -> None:
+        """Один `Protocol` реализуют два модуля — ошибка старта."""
+        binding = ServiceBinding(GreeterService, AlphaGreeter)
+        with pytest.raises(ModuleLoadError, match="GreeterService"):
+            ModuleRegistry.build([_module("alpha", provides=(binding,)), _module("beta", provides=(binding,))])
+
+    def test_foreign_module_protocol_is_rejected(self) -> None:
+        """Модуль не регистрирует реализацию `Protocol` из `public` чужого модуля."""
+        foreign = type("IdentityService", (Protocol,), {"__module__": "app.modules.identity.public.services"})
+        with pytest.raises(ModuleLoadError, match="identity"):
+            ModuleRegistry.build([_module("alpha", provides=(ServiceBinding(foreign, AlphaGreeter),))])
+
+    def test_factory_must_be_callable(self) -> None:
+        """Фабрика должна быть вызываемой."""
+        with pytest.raises(ModuleLoadError, match="фабрика"):
+            ModuleRegistry.build([_module("alpha", provides=(ServiceBinding(GreeterService, object()),))])  # type: ignore[arg-type]

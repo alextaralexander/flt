@@ -15,10 +15,25 @@
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Any, cast
 
 
 type _Key = tuple[type[Any], str | None]
+
+
+@dataclass(frozen=True)
+class ServiceBinding:
+    """Реализация `Protocol` из `public/` модуля для контейнера (`ModuleDefinition.provides`, OQ-86).
+
+    Attributes:
+        key: Тип `Protocol`, который модуль экспортирует в `public/`.
+        factory: Фабрика без аргументов; вызывается при каждом `resolve` (экземпляры между
+            запросами не живут, SYS-05-R1).
+    """
+
+    key: type[Any]
+    factory: Callable[[], Any]
 
 
 class DependencyNotRegisteredError(LookupError):

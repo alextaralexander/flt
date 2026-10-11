@@ -20,7 +20,7 @@ from pydantic_settings import BaseSettings
 from sqlalchemy import MetaData
 
 from app.core.captcha import CaptchaProvider, captcha_provider_from_settings
-from app.core.container import container
+from app.core.container import ServiceBinding, container
 from app.core.extensions.point import ExtensionContribution, ExtensionPoint
 from app.core.extensions.registry import (
     ExtensionRegistry,
@@ -50,6 +50,8 @@ class ModuleDefinition:
         contributions: Вклады модуля в точки расширения (свои и чужие, SYS-09-R2).
         role_permissions_provider: Реализация `RolePermissionsProvider`; объявляет только `identity`
             (ADR-006, раздел 3.8).
+        provides: Реализации `Protocol` из `public/` модуля, которые `install_modules` регистрирует
+            в контейнере (ADR-004, раздел 2.6; OQ-86).
     """
 
     name: str
@@ -63,6 +65,7 @@ class ModuleDefinition:
     extension_points: tuple[ExtensionPoint[Any], ...] = ()
     contributions: tuple[ExtensionContribution, ...] = ()
     role_permissions_provider: RolePermissionsProvider | None = None
+    provides: tuple[ServiceBinding, ...] = ()
 
 
 class ModuleLoadError(RuntimeError):
@@ -102,6 +105,19 @@ def _check_extension_points(module: ModuleDefinition) -> None:
             raise ModuleLoadError(f"Модуль {module.name}: точка {point.name!r} должна начинаться с '{module.name}.'.")
 
 
+def _check_provides(module: ModuleDefinition) -> None:
+    """Фабрики вызываемы; модуль реализует только свои `Protocol` (`app.modules.<module>.public`)."""
+    for binding in module.provides:
+        label = getattr(binding.key, "__qualname__", repr(binding.key))
+        if not callable(binding.factory):
+            raise ModuleLoadError(f"Модуль {module.name}: фабрика для {label} не вызываемая.")
+        owner_module = getattr(binding.key, "__module__", "")
+        if owner_module.startswith("app.modules.") and not owner_module.startswith(f"app.modules.{module.name}."):
+            raise ModuleLoadError(
+                f"Модуль {module.name}: {label} объявлен в {owner_module}; реализацию регистрирует модуль-владелец."
+            )
+
+
 class ModuleRegistry(Sequence[ModuleDefinition]):
     """Модули реестра в порядке зависимостей и собранные из них объекты старта.
 
@@ -136,6 +152,7 @@ class ModuleRegistry(Sequence[ModuleDefinition]):
             _check_permissions(module)
             _check_router_prefix(module)
             _check_extension_points(module)
+            _check_provides(module)
             provider = module.role_permissions_provider
             if provider is not None:
                 if not isinstance(provider, RolePermissionsProvider):
@@ -143,6 +160,15 @@ class ModuleRegistry(Sequence[ModuleDefinition]):
                         f"Модуль {module.name}: провайдер ролей не реализует RolePermissionsProvider."
                     )
                 providers.append((module.name, provider))
+        bindings: dict[type[Any], str] = {}
+        for module in definitions:
+            for binding in module.provides:
+                if binding.key in bindings:
+                    label = getattr(binding.key, "__qualname__", repr(binding.key))
+                    raise ModuleLoadError(
+                        f"{label} реализуют несколько модулей: {bindings[binding.key]}, {module.name}."
+                    )
+                bindings[binding.key] = module.name
         if len(providers) > 1:
             names = ", ".join(name for name, _ in providers)
             raise ModuleLoadError(f"RolePermissionsProvider объявлен несколькими модулями: {names} (только identity).")
@@ -209,11 +235,15 @@ def install_modules(registry: ModuleRegistry) -> None:
     - реестры точек расширения — под именами точек (SYS-09-R3);
     - провайдер ролей `identity` (без него — запрет всего, SYS-06-R4);
     - `TokenVerifier` из настроек процесса (ключи неизменны в процессе, ADR-006);
-    - `MailClient` (SMTP, OQ-11) и `CaptchaProvider` (по `CAPTCHA_PROVIDER`, OQ-10) — фабрики из настроек.
+    - `MailClient` (SMTP, OQ-11) и `CaptchaProvider` (по `CAPTCHA_PROVIDER`, OQ-10) — фабрики из настроек;
+    - реализации `Protocol` модулей из `ModuleDefinition.provides` (OQ-86).
 
     Повторный вызов (пересборка приложения в тестах) заменяет регистрации.
     """
     register_extension_registries(registry.extensions)
+    for module in registry:
+        for binding in module.provides:
+            container.register(binding.key, binding.factory, replace=True)
     if registry.role_permissions_provider is None:
         container.unregister(RolePermissionsProvider)
     else:

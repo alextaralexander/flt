@@ -23,7 +23,9 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.core.dao.caching.redis_conn import close_redis_client
 from app.core.dao.db_helpers.db_connection import dispose_engine, get_engine
+from app.core.http.body_limit import BodyLimitMiddleware
 from app.core.http.context import RequestContextMiddleware
+from app.core.http.deprecation import DeprecationMiddleware
 from app.core.http.exception_handlers import register_exception_handlers
 from app.core.http.idempotency import IdempotencyMiddleware
 from app.core.http.instance_header import InstanceIdMiddleware
@@ -117,6 +119,8 @@ def create_app(modules: Sequence[ModuleDefinition] | None = None, role: AppRole 
         allow_headers=settings.ALLOW_HEADERS,
     )
     application.add_middleware(PrometheusMiddleware)
+    # Заголовки вывода операций из эксплуатации (SYS-03-R28).
+    application.add_middleware(DeprecationMiddleware)
     # Сохранение ответов идемпотентных POST (SYS-03-R18): внутри logging-middleware,
     # чтобы видеть ответы обработчиков исключений и необработанные ошибки.
     application.add_middleware(IdempotencyMiddleware)
@@ -131,6 +135,8 @@ def create_app(modules: Sequence[ModuleDefinition] | None = None, role: AppRole 
     register_logging_middleware(application)
     # X-Request-ID и Content-Language — снаружи logging-middleware: ID есть и в 500 (SYS-03-R20, R30)
     application.add_middleware(RequestContextMiddleware)
+    # Лимит тела — до чтения тела любым слоем (SYS-03-R26); 413 получает X-Request-ID и X-Instance-Id.
+    application.add_middleware(BodyLimitMiddleware)
     # Внешний слой: X-Instance-Id в каждом ответе, включая 500 и handshake WebSocket (SYS-05-R5)
     application.add_middleware(InstanceIdMiddleware)
 
