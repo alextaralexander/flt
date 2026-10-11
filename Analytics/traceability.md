@@ -2,7 +2,7 @@
 
 > Связь BRD ↔ ТЗ ↔ тесты ↔ статус для каждого пункта бизнес-требований.
 > Основа: [FLT_BRD.md](BRD/FLT_BRD.md) и [SDD_plan.md](BRD/SDD_plan.md) (Приложение А, разделы этапов). Правила процесса: [CLAUDE.md](../CLAUDE.md).
-> Версия 0.5 от 2026-10-11, статус: **draft**.
+> Версия 0.6 от 2026-10-11, статус: **draft**.
 
 ## 1. Назначение
 
@@ -165,18 +165,18 @@
 
 | ID | Название | Этап | Путь | Статус |
 |---|---|---|---|---|
-| SYS-01 | Карта модулей | 1 | `Analytics/Specs/_system/SYS-01-module-map.md` | draft |
-| SYS-02 | Нефункциональные требования | 1 | `Analytics/Specs/_system/SYS-02-non-functional-requirements.md` | draft |
-| SYS-03 | Конвенции REST API | 1 | `Analytics/Specs/_system/SYS-03-rest-api-conventions.md` | draft |
-| SYS-04 | Асинхронное взаимодействие (WebSocket, Kafka) | 1 | `Analytics/Specs/_system/SYS-04-async-messaging.md` | draft |
-| SYS-05 | Масштабирование и хранение состояния | 1 | `Analytics/Specs/_system/SYS-05-state-and-scaling.md` | draft |
-| SYS-06 | Роли и права | 1 | `Analytics/Specs/_system/SYS-06-roles-and-permissions.md` | draft |
-| SYS-07 | i18n | 1 | `Analytics/Specs/_system/SYS-07-i18n-and-rtl.md` | draft |
-| SYS-08 | LLM-шлюз | 1 | `Analytics/Specs/_system/SYS-08-llm-gateway.md` | draft |
-| SYS-09 | Точки расширения для будущих плагинов | 1 | `Analytics/Specs/_system/SYS-09-extension-points.md` | draft |
-| SYS-10 | Тестовая стратегия | 1 | `Analytics/Specs/_system/SYS-10-test-strategy.md` | draft |
-| SYS-11 | Развёртывание | 1 | `Analytics/Specs/_system/SYS-11-deployment-and-environments.md` | draft |
-| SYS-12 | CI/CD и качество | 1 | `Analytics/Specs/_system/SYS-12-ci-cd-and-quality.md` | draft |
+| SYS-01 | Карта модулей | 1 | `Analytics/Specs/_system/SYS-01-module-map.md` | approved |
+| SYS-02 | Нефункциональные требования | 1 | `Analytics/Specs/_system/SYS-02-non-functional-requirements.md` | approved |
+| SYS-03 | Конвенции REST API | 1 | `Analytics/Specs/_system/SYS-03-rest-api-conventions.md` | approved |
+| SYS-04 | Асинхронное взаимодействие (WebSocket, Kafka) | 1 | `Analytics/Specs/_system/SYS-04-async-messaging.md` | approved |
+| SYS-05 | Масштабирование и хранение состояния | 1 | `Analytics/Specs/_system/SYS-05-state-and-scaling.md` | approved |
+| SYS-06 | Роли и права | 1 | `Analytics/Specs/_system/SYS-06-roles-and-permissions.md` | approved |
+| SYS-07 | i18n | 1 | `Analytics/Specs/_system/SYS-07-i18n-and-rtl.md` | approved |
+| SYS-08 | LLM-шлюз | 1 | `Analytics/Specs/_system/SYS-08-llm-gateway.md` | approved |
+| SYS-09 | Точки расширения для будущих плагинов | 1 | `Analytics/Specs/_system/SYS-09-extension-points.md` | approved |
+| SYS-10 | Тестовая стратегия | 1 | `Analytics/Specs/_system/SYS-10-test-strategy.md` | approved |
+| SYS-11 | Развёртывание | 1 | `Analytics/Specs/_system/SYS-11-deployment-and-environments.md` | approved |
+| SYS-12 | CI/CD и качество | 1 | `Analytics/Specs/_system/SYS-12-ci-cd-and-quality.md` | approved |
 | SYS-13 | Архитектура плагинов | 7 | `Analytics/Specs/_system/SYS-13-plugin-architecture.md` | — |
 | ADR-001 | Стек и политика версий (Python и FastAPI, React и TypeScript, переход на Python 3.14) | 1 | `Analytics/ADR/ADR-001-tech-stack.md` | accepted |
 | ADR-002 | Раскладка доменных модулей в boilerplate, скаффолдер, контроль границ модулей | 1 | `Analytics/ADR/ADR-002-module-layout.md` | accepted |
