@@ -1,0 +1,71 @@
+# Общие схемы асинхронных контрактов FLT (SYS-04-R33, этап 1 Г.3): WebSocket-конверт, конверт события,
+# команды и прогресс фоновых заданий, служебные сообщения ws.*, бинарный кадр, серверы.
+# Контракты модулей подключают их ссылками; файл правится только через изменение SYS-04.
+asyncapi: 3.0.0
+info: { title: FLT common async schemas, version: 1.0.0 }
+servers:
+  ws:    { host: "/", pathname: /ws, protocol: wss, description: "WebSocket фронтенда через HAProxy (ADR-012)" }
+  kafka: { host: "kafka:9092", protocol: kafka, description: "внутренний брокер; наружу не публикуется" }
+channels: {}
+operations: {}
+components:
+  messages:
+    wsSubscribe:   { name: ws.subscribe,   payload: { $ref: "#/components/schemas/WsSubscribePayload" } }
+    wsUnsubscribe: { name: ws.unsubscribe, payload: { $ref: "#/components/schemas/WsSubscribePayload" } }
+    wsAck:         { name: ws.ack,         payload: { $ref: "#/components/schemas/WsAckPayload" } }
+    wsError:       { name: ws.error,       payload: { $ref: "#/components/schemas/WsErrorPayload" } }
+    wsPing:        { name: ws.ping,        payload: { $ref: "#/components/schemas/WsPingPayload" } }
+    wsPong:        { name: ws.pong,        payload: { $ref: "#/components/schemas/WsPongPayload" } }
+    jobCommand:    { name: core.job.command, payload: { $ref: "#/components/schemas/JobCommand" } }
+  schemas:
+    WsEnvelope:
+      type: object
+      additionalProperties: false
+      required: [type, correlation_id, channel, seq, ts, payload]
+      properties:
+        type: { type: string, pattern: "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)?$" }
+        correlation_id: { type: string, format: uuid }
+        channel: { type: [string, "null"], pattern: "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*(:[A-Za-z0-9_-]{1,64})?$" }
+        seq: { type: integer, minimum: 0 }
+        ts: { type: string, format: date-time }
+        payload: { type: object }
+    EventEnvelope:
+      type: object
+      required: [event_id, event_type, event_version, occurred_at, producer, aggregate_type, aggregate_id, correlation_id, causation_id, actor_id, payload]
+      properties:
+        event_id: { type: string, format: uuid }
+        event_type: { type: string }
+        event_version: { type: integer, minimum: 1 }
+        occurred_at: { type: string, format: date-time }
+        producer: { type: string }
+        aggregate_type: { type: string }
+        aggregate_id: { type: string, format: uuid }
+        correlation_id: { type: string, format: uuid }
+        causation_id: { type: [string, "null"], format: uuid }
+        actor_id: { type: [string, "null"], format: uuid }
+        payload: { type: object }
+    JobCommand:
+      type: object
+      required: [job_id, kind, payload, attempt]
+      properties:
+        job_id: { type: string, format: uuid }
+        kind: { type: string }
+        payload: { type: object }
+        attempt: { type: integer, minimum: 1 }
+    JobProgressPayload:
+      type: object
+      required: [job_id, stage, percent, message_key]
+      properties:
+        job_id: { type: string, format: uuid }
+        stage: { type: string }
+        percent: { type: integer, minimum: 0, maximum: 100 }
+        message_key: { type: string }
+    JobCompletedPayload: { type: object, required: [job_id, result_ref], properties: { job_id: { type: string, format: uuid }, result_ref: { type: string } } }
+    JobFailedPayload: { type: object, required: [job_id, code], properties: { job_id: { type: string, format: uuid }, code: { type: string }, details: { type: object } } }
+    WsSubscribePayload: { type: object, required: [channel], properties: { channel: { type: string } } }
+    WsAckPayload: { type: object, required: [op, channel, state_url], properties: { op: { enum: [subscribe, unsubscribe] }, channel: { type: string }, state_url: { type: [string, "null"] } } }
+    WsErrorPayload: { type: object, required: [code, message], properties: { code: { type: string }, message: { type: string }, channel: { type: [string, "null"] }, retry_after_ms: { type: integer }, details: { type: object } } }
+    WsPingPayload: { type: object, required: [server_ts], properties: { server_ts: { type: string, format: date-time } } }
+    WsPongPayload: { type: object, required: [server_ts, client_ts], properties: { server_ts: { type: string, format: date-time }, client_ts: { type: string, format: date-time } } }
+  x-flt-binary-frame:
+    description: "Бинарное сообщение: 1 байт тип (0x01 аудио клиента, 0x02 аудио сервера, 0x03-0x7F резерв фронтенда, 0x80-0xFF резерв агента), 4 байта stream_id big-endian, 4 байта seq big-endian, далее данные; размер ≤ 64 КиБ"

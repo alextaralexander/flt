@@ -1,0 +1,58 @@
+{
+  "app": {
+    "name": "FLT"
+  },
+  "errors": {
+    "app": {
+      "network": "No connection to the server",
+      "refresh": "Refresh",
+      "request-failed": "The request failed",
+      "request-id": "Request ID: {{id}}",
+      "request-title": "Error",
+      "title": "Ooops, something went wrong",
+      "too-large": "The file or request is too large",
+      "too-many-requests": "Too many requests, try again later",
+      "unavailable": "The service is temporarily unavailable"
+    }
+  },
+  "language": {
+    "native": {
+      "ar": "العربية",
+      "en": "English",
+      "ru": "Русский"
+    },
+    "switcher": {
+      "label": "Interface language"
+    }
+  },
+  "layout": {
+    "logo-alt": "Logo",
+    "nav": {
+      "dashboard": "Dashboard",
+      "discussions": "Discussions",
+      "users": "Users"
+    },
+    "toggle-menu": "Toggle Menu",
+    "user-menu": {
+      "open": "Open user menu",
+      "profile": "Your Profile",
+      "sign-out": "Sign Out"
+    }
+  },
+  "ui": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "loading": "Loading",
+    "pagination": {
+      "label": "pagination",
+      "more": "More pages",
+      "next": "Next",
+      "next-label": "Go to next page",
+      "previous": "Previous",
+      "previous-label": "Go to previous page"
+    },
+    "table": {
+      "empty": "No Entries Found"
+    }
+  }
+}

@@ -3,7 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Статус | accepted |
-| Версия | 1.0 |
+| Версия | 1.1 |
 | Дата | 2026-10-10 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-10 (PR #2) |
@@ -119,11 +119,13 @@
 | zustand | 4 | 5 | `vi.mock('zustand')` в `setup-tests.ts` обновляется под мок v5 |
 | react-hook-form, @hookform/resolvers | 7, 3 | 7, 5 | — |
 | axios | 1 | 1 | — |
-| i18next, react-i18next, i18next-browser-languagedetector, i18next-resources-to-backend, i18next-parser | — | 25, 16, 8, 1, 9 | новые |
+| i18next, react-i18next, i18next-browser-languagedetector, i18next-resources-to-backend, i18next-cli | — | 25, 16, 8, 1, 1 | новые; `i18next-cli` вместо `i18next-parser`, который не устанавливается на Node 24 (уточнено при реализации Г.1, PR #5) |
 | orval | — | 7 | новый (devDependency) |
 | @faker-js/faker | `@ngneat/falso` 7 | 10 | orval генерирует моки на faker; `falso` удаляется, `src/testing/data-generators.ts` переводится на faker |
 | @radix-ui/react-direction | — | 1 | новый (`DirectionProvider`) |
 | husky, lint-staged в `src/frontend` | 9, 15 | удаляются | хуки переезжают в корневой `.pre-commit-config.yaml` (ADR-011) |
+
+Фактические версии на момент реализации Г.1 (2026-10-11, PR #5) выше минимумов и соответствуют правилу «мажорная версия не моложе 60 дней»: Vite 8, Vitest 4, TypeScript 6, React Router 8 (library mode), Storybook 10, zod 4, orval 8. ESLint остаётся на 9: на ESLint 10 не работает плагин React; переход — мажорным PR Renovate (ADR-001).
 
 ### 3.2. Порядок миграции (шаги Г.1, каждый — отдельный коммит при зелёных `pnpm lint`, `pnpm check-types`, `pnpm test`, `pnpm build`)
 
@@ -152,7 +154,7 @@
 - Библиотеки: `i18next`, `react-i18next`, `i18next-browser-languagedetector`, `i18next-resources-to-backend`; инициализация — `src/lib/i18n/i18n.ts`; языки `ru`, `en`, `ar`; `supportedLngs: ['ru', 'en', 'ar']`, `nonExplicitSupportedLngs: true` (`ru-RU` → `ru`), `load: 'languageOnly'`.
 - Определение языка: `i18next-browser-languagedetector` с порядком источников и ключом хранения, которые задаёт SYS-07 (OQ-25: профиль → явный выбор в `localStorage` ключ `flt.ui_language` → `navigator.languages` → язык по умолчанию). Язык из профиля (STU-06, этап 4) применяется вызовом `i18n.changeLanguage` после загрузки `me`. Хранение выбора в `localStorage` — состояние браузера, а не инстанса (допустимо по CLAUDE.md «Масштабирование и состояние»).
 - Структура ресурсов — namespace на модуль, файлы рядом с модулем:
-  ```
+  ```text
   src/lib/i18n/
     i18n.ts                      # init, детектор, resources-to-backend
     direction.ts                 # getDirection(lng): 'ltr' | 'rtl'; applyDocumentDirection(lng)
@@ -163,7 +165,7 @@
   ```
   Shared-слой не знает о модулях: namespaces модулей регистрируются в `src/app/i18n-resources.ts` (слой `app` импортирует `features` — разрешено зонами ESLint). Загрузка ленивая (`import()`), ресурсы попадают в чанк модуля. `i18next-resources-to-backend` получает функцию `(lng, ns) => registry[ns][lng]()`.
 - Ключи: английские, вложенные через точку (`login.form.submit`), namespace через двоеточие (`identity:login.form.submit`); хук `useTranslation('identity')` в модуле. Эталонный язык ключей — `ru` (аудитория РФ, OQ-25); `en` и `ar` обязаны содержать те же ключи.
-- Контроль полноты: `i18next-parser` (конфиг `i18next-parser.config.ts`, `locales: ['ru','en','ar']`, `keepRemoved: false`); скрипт `i18n:extract` обновляет файлы, `i18n:check` (`i18next-parser --fail-on-update`) падает в CI при неизвлечённых или лишних ключах; пустые значения в `en`/`ar` запрещены (проверка — тот же скрипт с `--fail-on-warnings`).
+- Контроль полноты: `i18next-cli` (конфиг `i18next.config.ts`, `locales: ['ru','en','ar']`, удаление лишних ключей); скрипт `i18n:extract` (`i18next-cli extract`) обновляет файлы, `i18n:check` (`i18next-cli extract --ci && i18next-cli status`) падает в CI при неизвлечённых или лишних ключах и при пустых значениях в `en`/`ar`.
 - Типизация ключей: `src/types/i18next.d.ts` объявляет `CustomTypeOptions.resources` из `ru`-файлов (`common` + все модули) — опечатка в ключе ломает `pnpm check-types`.
 - Множественное число: суффиксы i18next v4 (`_zero`, `_one`, `_two`, `_few`, `_many`, `_other`) через `Intl.PluralRules`; интерполяция `{{count}}`. Даты и числа: `Intl.DateTimeFormat`/`Intl.NumberFormat` через `i18next` `interpolation.format`; система счисления для `ar` (`latn` или `arab`) — SYS-07. `dayjs` остаётся для вычислений с датами, локали `ru`, `en`, `ar` подключаются вместе с ресурсами.
 - Строки UI вне `t()` запрещены: правило `react/jsx-no-literals` в режиме `noStrings: true, ignoreProps: false, allowedStrings: []` для `src/features/**` и `src/components/**` (исключения — `*.stories.tsx`, `*.test.tsx`, `src/testing/**`).
@@ -175,7 +177,7 @@
 - Radix: `<DirectionProvider dir={direction}>` оборачивает приложение в `src/app/provider.tsx`; `direction` берётся из хука `useDirection()` (`src/lib/i18n/use-direction.ts`), подписанного на `languageChanged`.
 - Tailwind: только логические утилиты — `ms-*`, `me-*`, `ps-*`, `pe-*`, `start-*`, `end-*`, `inset-s-*`, `inset-e-*`, `text-start`, `text-end`, `rounded-s-*`, `rounded-e-*`, `rounded-ss-*`, `rounded-se-*`, `rounded-es-*`, `rounded-ee-*`, `border-s-*`, `border-e-*`, `scroll-ms-*`, `scroll-me-*`, `scroll-ps-*`, `scroll-pe-*`, `float-start`, `float-end`, `clear-start`, `clear-end`. Варианты `rtl:` и `ltr:` разрешены только для зеркалирования иконок и фоновых изображений (`rtl:-scale-x-100` для `ChevronRight`, `ArrowRight` из lucide).
 - Запрет физических классов — локальное правило ESLint `flt/no-physical-direction-classes` (файл `eslint-rules/no-physical-direction-classes.js`, подключается в `eslint.config.js` как плагин `flt`). Правило проверяет строковые литералы и шаблонные строки в атрибуте `className` и в аргументах вызовов `cn(...)`, `cva(...)`, `twMerge(...)` регулярным выражением:
-  ```
+  ```text
   (^|[\s:'"`])(-?)(ml|mr|pl|pr|left|right|inset-x|scroll-ml|scroll-mr|scroll-pl|scroll-pr|rounded-l|rounded-r|rounded-tl|rounded-tr|rounded-bl|rounded-br|border-l|border-r)-|(^|[\s:'"`])(text-left|text-right|float-left|float-right|clear-left|clear-right)(\s|$|['"`])
   ```
   Исключение — класс с явным вариантом `ltr:` или `rtl:` (разрешено только внутри `src/components/ui`). Для `.css`-файлов — архитектурный тест `src/testing/architecture/no-physical-direction.test.ts` с тем же выражением плюс свойства `margin-left`, `margin-right`, `padding-left`, `padding-right`, `left:`, `right:`, `text-align: left`, `text-align: right`, `border-left`, `border-right` (разрешены логические `margin-inline-start`, `padding-inline-end`, `inset-inline-start`, `text-align: start`).
@@ -214,7 +216,7 @@
   Сгенерированный код коммитится (`src/features/<module>/api/generated/**`), исключается из ESLint, Prettier и покрытия; скрипт `api:generate` = `orval`, `api:check` = `orval && git diff --exit-code -- 'src/**/generated/**'` выполняется в CI, чтобы код не расходился с контрактом. Шаблон ТЗ (раздел «Контракты») ссылается на эту команду. Ручные обёртки над сгенерированными хуками (ключи запросов, инвалидация) лежат в `src/features/<module>/api/*.ts`, как в `docs/api-layer.md`.
 - Моки: сгенерированные MSW-обработчики (`*.msw.ts`, faker с фиксированным `seed`) подключаются в `src/testing/mocks/handlers/<module>.ts`, где при необходимости дополняются состоянием на `@mswjs/data`; `mock-server.ts` (Express + `@mswjs/http-middleware`) остаётся для E2E на mock-сервере.
 - WebSocket-клиент — shared-слой `src/lib/ws/`:
-  ```
+  ```text
   src/lib/ws/ws-client.ts        # класс WsClient: connect(), close(), send(msg), subscribe(type, schema, handler) → unsubscribe
   src/lib/ws/use-ws-subscription.ts  # хук useWsSubscription(type, schema, handler) с автоотпиской
   src/lib/ws/envelope.ts         # zod-схема конверта из ADR-004 (type, correlation_id, channel, seq, ts, payload); бинарные кадры — заголовок 9 байт (тип, stream_id, seq)
@@ -303,7 +305,7 @@ export default [
   }
   ```
   `Content-Security-Policy` задаёт Nginx в этом же файле (ADR-012 закрепляет CSP за ADR-005, так как политика зависит от сборки frontend); HSTS, `X-Frame-Options`, `Permissions-Policy` ставит HAProxy (ADR-012). Стартовая политика для HTML-ответов (`location = /index.html`):
-  ```
+  ```text
   Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
   ```
   Обоснование: сборка Vite не содержит inline-скриптов (`<script type="module" src>`), поэтому `script-src` без хэшей; `'wasm-unsafe-eval'` нужен для VAD в WASM на этапе 5 (ADR-009); `'unsafe-inline'` в `style-src` — для inline-атрибутов `style` компонентов Radix (нонсы к атрибутам неприменимы); `connect-src 'self'` покрывает `/api` и `/ws` того же origin; `media-src blob:` — воспроизведение аудио TTS; файлы хранилища отдаются с того же origin по путям `/flt-*` (ADR-007, ADR-012), поэтому покрываются `'self'` и отдельных источников не требуют. Любое расширение политики фиксируется в ТЗ, которое его требует. Один и тот же файл используется в docker-compose (копируется в образ) и в Helm (тот же образ; переопределение через ConfigMap — SYS-11). Healthcheck контейнера — `GET /healthz`.
@@ -311,6 +313,7 @@ export default [
 ### 3.9. Переменные окружения
 
 `src/frontend/.env.example`:
+
 ```ini
 # Относительные адреса: один и тот же build на всех стендах, маршрутизация через HAProxy (ADR-012)
 VITE_APP_API_URL=/api/v1
@@ -320,6 +323,7 @@ VITE_APP_ENABLE_API_MOCKING=false
 # Адрес бэкенда для dev-прокси Vite (не попадает в сборку)
 VITE_DEV_BACKEND_URL=http://localhost:8000
 ```
+
 `.env.example-e2e` — то же с `VITE_APP_ENABLE_API_MOCKING=true` и `VITE_APP_APP_URL=http://localhost:3000`. Переменные `APP_URL`, `APP_MOCK_API_PORT` из `src/config/env.ts` сохраняются для mock-сервера.
 
 ## 4. Последствия
@@ -390,3 +394,4 @@ VITE_DEV_BACKEND_URL=http://localhost:8000
 | 0.1 | 2026-10-10 | Claude | Черновик | proposed |
 | 0.2 | 2026-10-10 | Claude | Решение пользователя 2026-10-10: порог покрытия 70 % lines/functions/statements, 60 % branches, `src/app/routes` исключены. Согласование с ADR-012 и ADR-004 (без переписывания `/api` → `/v1`, путь `/ws`, поля конверта `channel` и `ts`), ADR-007 (dev-прокси `/flt-*`, запрет маршрутов с этим префиксом), ADR-011 (имена скриптов CI) | proposed |
 | 1.0 | 2026-10-10 | пользователь | Принят без изменений (PR #2, слияние в main) | accepted |
+| 1.1 | 2026-10-11 | пользователь | Без изменения решения, уточнения по реализации Г.1 (PR #5): `i18next-cli` вместо `i18next-parser` (Node 24); фиксация фактических версий выше минимумов; ESLint остаётся на 9 | accepted |

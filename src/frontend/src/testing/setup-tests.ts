@@ -1,18 +1,22 @@
 import '@testing-library/jest-dom/vitest';
 
+import { initTestI18n, resetTestI18n } from '@/testing/i18n';
 import { initializeDb, resetDb } from '@/testing/mocks/db';
 import { server } from '@/testing/mocks/server';
 
 vi.mock('zustand');
 
+initTestI18n();
+
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterAll(() => server.close());
 beforeEach(() => {
-  const ResizeObserverMock = vi.fn(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  }));
+  // Vitest 4: мок, вызываемый через new, должен быть классом
+  class ResizeObserverMock {
+    observe = vi.fn();
+    unobserve = vi.fn();
+    disconnect = vi.fn();
+  }
 
   vi.stubGlobal('ResizeObserver', ResizeObserverMock);
 
@@ -21,7 +25,8 @@ beforeEach(() => {
 
   initializeDb();
 });
-afterEach(() => {
+afterEach(async () => {
+  await resetTestI18n();
   server.resetHandlers();
   resetDb();
 });

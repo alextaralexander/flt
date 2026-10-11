@@ -3,7 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Статус | accepted |
-| Версия | 1.1 |
+| Версия | 1.2 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-10 (PR #2) |
@@ -165,7 +165,7 @@
 
 ### 3.1. Структура каталогов
 
-```
+```text
 src/backend/py-monolyth/
   .importlinter                      # контракты границ (раздел 3.5)
   alembic.ini                        # секция [<module>] на каждый модуль (раздел 3.4)
@@ -329,7 +329,7 @@ MODULES: tuple[str, ...] = (
 
 ### 3.4. Схема PostgreSQL и миграции модуля
 
-- `app/core/dao/db_helpers/base.py` дополняется фабрикой `make_module_base(schema: str) -> type[DeclarativeBase]`: возвращает класс `Base` с `metadata = MetaData(schema=schema, naming_convention=NAMING_CONVENTION)`. Модуль объявляет `Base = make_module_base("identity")` в `models/__init__.py` и наследует от него все модели; `__table_args__` со схемой не требуется.
+- `app/core/dao/db_helpers/base.py` дополняется фабрикой `make_module_base(schema: str) -> type[DeclarativeBase]`: возвращает класс `Base` с `metadata = MetaData(schema=schema, naming_convention=NAMING_CONVENTION)`. Модуль объявляет базу в `models/__init__.py` и наследует от неё все модели; `__table_args__` со схемой не требуется. Под mypy strict присваивание `Base = make_module_base("identity")` не годится как базовый класс, поэтому скаффолдер генерирует эквивалент `class Base(DeclarativeBase): metadata = module_metadata("identity")` (уточнено при реализации Г.1, PR #5).
 - Внешние ключи и `relationship` между схемами запрещены; ссылки на сущности других модулей — колонки `UUID` без `ForeignKey` (проверяет архитектурный тест).
 - `alembic.ini`:
 
@@ -433,8 +433,10 @@ source_modules =
     app.modules
 forbidden_modules =
     app.core.kafka.broker
-    faststream.kafka.KafkaBroker
 allow_indirect_imports = True
+; import-linter запрещает только модули, а не классы: запрет `faststream.kafka.KafkaBroker`
+; выражен запретом модуля `app.core.kafka.broker`, где создаётся брокер процесса, и
+; архитектурным тестом «нет прямого broker.publish» (уточнено при реализации Г.1, PR #5).
 
 ; 7. Клиенты внешних хранилищ — только через обёртки shared kernel (ADR-007, ADR-014).
 [importlinter:contract:storage-clients-only-via-core]
@@ -462,7 +464,7 @@ allow_indirect_imports = True
 | Тест | Что проверяет | Как |
 |---|---|---|
 | `test_import_linter_passes` | Все контракты `.importlinter` выполняются на текущем дереве | `subprocess.run(["lint-imports"])`, код возврата 0 |
-| `test_boundary_violation_breaks_build` (негативный тест, критерий выхода этапа 1) | Нарушение границы действительно ломает проверку | Копирует `app/`, `configs/` и `.importlinter` во временный каталог, дописывает в `app/modules/identity/services/_probe.py` импорт `from app.modules.llm_gateway.dao import …`, запускает `lint-imports` в копии; ожидает код возврата 1 и строку `BROKEN CONTRACTS` с именем контракта `modules-public-api-only`; второй сценарий — импорт `app.modules.identity.public` из `app.modules.llm_gateway` ломает `modules-dependency-order` |
+| `test_boundary_violation_breaks_build` (негативный тест, критерий выхода этапа 1) | Нарушение границы действительно ломает проверку | Копирует `app/`, `configs/` и `.importlinter` во временный каталог, дописывает в `app/modules/identity/services/_probe.py` импорт `from app.modules.llm_gateway.dao import …`, запускает `lint-imports` в копии; ожидает код возврата 1 и строку `BROKEN CONTRACTS` с именем контракта `modules-public-api-only`; второй сценарий — импорт `app.modules.llm_gateway.public` из `app.modules.identity` (обратное направление: `identity` ниже `llm_gateway` в порядке SYS-01) ломает `modules-dependency-order` |
 | `test_registry_and_contracts_are_complete` | Каждый каталог `app/modules/<name>` (кроме `registry.py`) есть в `MODULES`, в контрактах 1–3 `.importlinter` и в секциях `alembic.ini`; и наоборот | Сравнение множеств имён |
 | `test_no_cross_module_foreign_keys` | Ни одна таблица модуля не ссылается `ForeignKey` на таблицу другой схемы | Обход `module.metadata.tables` для всех модулей реестра |
 | `test_module_tables_live_in_module_schema` | Все таблицы `module.metadata` имеют `schema == module.name` | Обход метаданных |
@@ -482,7 +484,7 @@ allow_indirect_imports = True
 |---|---|
 | `make scaffold-module name=identity` (`python -m cli add-module identity`) | Создаёт `app/modules/identity/` по структуре 3.1 с `module.py`, `public/__init__.py`, `models/__init__.py` (`Base = make_module_base("identity")`), `settings.py`, `permissions.py`, `api/router.py` (`APIRouter(prefix="/api/v1/identity")`), `migrations/versions/`; добавляет имя в `MODULES` (`registry.py`), строки в контракты 1–3 `.importlinter`, секцию в `alembic.ini`, файлы `envs/<stand>/identity_<stand>.env` для всех стендов, каталог `tests/modules/identity/` с `conftest.py`; запускает ruff на созданных файлах; идемпотентна |
 | `make scaffold-entity module=identity name=User` (`python -m cli add-entity User --module identity`) | Как сегодняшний `add-entity`, но пути `app/modules/identity/{schemas,dao,services,api}/user_*.py`, модель `app/modules/identity/models/user.py` с импортом в `models/__init__.py`, права в `app/modules/identity/permissions.py`, роутер подключается в `app/modules/identity/api/router.py`, тест — `tests/modules/identity/services/test_user_service.py`. Параметр `--module` обязателен; при отсутствии модуля — ошибка с подсказкой `make scaffold-module` |
-| `make scaffold-subscriber module=identity topic=USER_REGISTERED value="…"` (`python -m cli add-subscriber … --module identity`) | Схема сообщения в `brokers/messages/`, сервис в `brokers/services/` или `services/`, член `StrEnum` в `brokers/topics.py`, хендлер в `brokers/subscribers.py` на роутере модуля; значение топика по формату SYS-04 |
+| `make scaffold-subscriber module=identity topic=USER_REGISTERED value="…"` (`python -m cli add-subscriber … --module identity`) | Схема сообщения в `brokers/messages/`, обработчик в `brokers/services/` (не в `services/`: иначе слой `services` импортировал бы `brokers` и нарушал контракт слоёв; уточнено при реализации Г.1, PR #5), член `StrEnum` в `brokers/topics.py`, хендлер в `brokers/subscribers.py` на роутере модуля; значение топика по формату SYS-04 |
 | `python -m cli list-modules` | Печатает `MODULES` построчно (используется Makefile для `make migrate` и CI) |
 | `make makemigration module=identity name="add_user"` | `alembic -n identity revision --autogenerate` |
 
@@ -562,3 +564,4 @@ allow_indirect_imports = True
 | 0.2 | 2026-10-10 | Claude | Согласование с ADR-003 (`RedisNamespace` → `ModuleRedis`, контракт на пакет `redis`), ADR-004 (префикс `/api/v1/<module>`, контракт «публикация только через outbox», `APP_ROLE`), ADR-007 и ADR-014 (контракт на клиенты хранилищ, пакеты `storage/` и `search/` в shared kernel); исключение `/api/v1/auth` для `identity` (`extra_prefixes`, тест `test_router_prefix_matches_module`) — решение оркестратора (OQ-12) | proposed |
 | 1.0 | 2026-10-10 | пользователь | Принят без изменений (PR #2, слияние в main) | accepted |
 | 1.1 | 2026-10-11 | Claude | Без изменения решений, согласование с SYS-04 и SYS-06 (блок Б этапа 1): `topics.py` перенесён из `brokers/` в `public/` (декларации `TopicDeclaration` с полем `visibility`), пример кода права `IDENTITY_GET_USER` заменён форматом SYS-06 `<module>:<resource>:<action>` (`identity:users:read`); пример был иллюстративным | accepted |
+| 1.2 | 2026-10-11 | пользователь | Без изменения решений, уточнения по реализации Г.1–Г.2 (PR #5): контракт 6 запрещает модуль `app.core.kafka.broker` (класс `KafkaBroker` import-linter запретить не может); обработчики Kafka скаффолдер кладёт в `brokers/services/`; база моделей — `class Base(DeclarativeBase)` с `module_metadata()` (mypy strict); второй сценарий негативного теста приведён к направлению SYS-01 | accepted |

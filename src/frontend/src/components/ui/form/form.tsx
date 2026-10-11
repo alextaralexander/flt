@@ -1,20 +1,23 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as LabelPrimitive from '@radix-ui/react-label';
+import type * as LabelPrimitive from '@radix-ui/react-label';
 import { Slot } from '@radix-ui/react-slot';
 import * as React from 'react';
-import {
-  Controller,
+import type {
   ControllerProps,
   FieldPath,
   FieldValues,
-  FormProvider,
+  Resolver,
   SubmitHandler,
   UseFormProps,
   UseFormReturn,
+} from 'react-hook-form';
+import {
+  Controller,
+  FormProvider,
   useForm,
   useFormContext,
 } from 'react-hook-form';
-import { ZodType, z } from 'zod';
+import type { ZodType, z } from 'zod';
 
 import { cn } from '@/utils/cn';
 
@@ -190,7 +193,10 @@ const Form = <
   id,
   schema,
 }: FormProps<TFormValues, Schema>) => {
-  const form = useForm({ ...options, resolver: zodResolver(schema) });
+  const form = useForm<TFormValues>({
+    ...options,
+    resolver: zodResolver(schema) as unknown as Resolver<TFormValues>,
+  });
   return (
     <FormProvider {...form}>
       <form

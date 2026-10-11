@@ -1,0 +1,417 @@
+# CI репозитория FLT — быстрая ступень (ADR-011 §3.1, SYS-12-R2, R4, R12, R25) и первый job
+# тяжёлой ступени stand-n3 (Г.3, SYS-05-R54, SYS-12-R3).
+# Состав этапа 1 Г.1: changes, backend-quality, architecture, backend-tests, frontend, docs, ci-ok;
+# Г.3: stand-n3. Job-ы tools, contracts, commits, dependency-audit и остальная тяжёлая ступень
+# (images, e2e, helm по условию run_full) добавляются в Г.10.
+# Правило always-report: job, чьи пути не менялись, не пропускается, а завершается
+# успехом пустым шагом — иначе обязательная проверка branch protection осталась бы без статуса.
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Версия pre-commit, которым CI запускает те же хуки, что и локально (.pre-commit-config.yaml).
+  PRE_COMMIT_VERSION: "4.6.2"
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read # dorny/paths-filter получает список файлов PR через API
+    outputs:
+      # workflow_dispatch — ручной полный прогон: все флаги путей поднимаются.
+      backend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.backend == 'true' }}
+      frontend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.frontend == 'true' }}
+      deploy: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.deploy == 'true' }}
+      docs: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.docs == 'true' }}
+      contracts: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.contracts == 'true' }}
+      run_full: ${{ steps.full.outputs.run_full }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: filter
+        if: github.event_name != 'workflow_dispatch'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            backend:
+              - 'src/backend/**'
+              - 'src/protocol/**'
+              - 'deploy/**'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'src/frontend/**'
+              - '.github/workflows/ci.yml'
+            deploy:
+              - 'deploy/**'
+            docs:
+              - 'Analytics/**'
+              - '*.md'
+              - '.markdownlint-cli2.yaml'
+              - '.pre-commit-config.yaml'
+              - '.github/workflows/**'
+            contracts:
+              - 'Analytics/Specs/**/api/*.yaml'
+      # Условие тяжёлой ступени (ADR-011 §3.1, SYS-12-R3); используется job-ами Г.10.
+      - id: full
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          LABEL_CI_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+        run: |
+          if [[ "$EVENT_NAME" == "push" || "$EVENT_NAME" == "workflow_dispatch" \
+             || "$PR_DRAFT" == "false" || "$LABEL_CI_FULL" == "true" ]]; then
+            echo "run_full=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_full=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  backend-quality:
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CHANGED: ${{ needs.changes.outputs.backend }}
+    steps:
+      - name: backend not changed — always-report success
+        if: env.CHANGED != 'true'
+        run: echo "src/backend, src/protocol and deploy are unchanged"
+      - if: env.CHANGED == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: env.CHANGED == 'true'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            src/backend/py-monolyth/uv.lock
+            src/protocol/uv.lock
+      - name: install (backend)
+        if: env.CHANGED == 'true'
+        working-directory: src/backend/py-monolyth
+        run: |
+          uv python install
+          make install
+      - name: uv.lock is up to date (backend)
+        if: env.CHANGED == 'true'
+        working-directory: src/backend/py-monolyth
+        run: uv lock --check
+      - name: format, lint, types, security (backend)
+        if: env.CHANGED == 'true'
+        working-directory: src/backend/py-monolyth
+        run: make format-check lint typecheck security
+      - name: lock, format, lint, types (flt-protocol)
+        if: env.CHANGED == 'true'
+        working-directory: src/protocol
+        run: |
+          uv lock --check
+          uv sync --locked
+          uv run --locked ruff format --check .
+          uv run --locked ruff check .
+          uv run --locked mypy
+      - name: detect-secrets (whole repository, root .secrets.baseline)
+        if: env.CHANGED == 'true'
+        run: uvx --from "pre-commit==${PRE_COMMIT_VERSION}" pre-commit run detect-secrets --all-files
+
+  architecture:
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CHANGED: ${{ needs.changes.outputs.backend }}
+    steps:
+      - name: backend not changed — always-report success
+        if: env.CHANGED != 'true'
+        run: echo "src/backend, src/protocol and deploy are unchanged"
+      - if: env.CHANGED == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: env.CHANGED == 'true'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: src/backend/py-monolyth/uv.lock
+      # Границы модулей и хранение состояния (ADR-002, SYS-12-R13): `make arch` запускает import-linter
+      # и pytest tests/architecture, включая негативный test_boundary_violation_breaks_build.
+      - name: architecture tests (make arch)
+        if: env.CHANGED == 'true'
+        working-directory: src/backend/py-monolyth
+        run: |
+          uv python install
+          make install
+          make arch
+
+  backend-tests:
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CHANGED: ${{ needs.changes.outputs.backend }}
+    # Образы — как в deploy/docker-compose/docker-compose.yml (ADR-001: минорные теги).
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: flt
+          POSTGRES_PASSWORD: flt_ci # pragma: allowlist secret
+          POSTGRES_DB: flt
+        options: >-
+          --health-cmd "pg_isready -U flt -d flt"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+        ports: ["5432:5432"]
+      redis:
+        image: redis:8-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+        ports: ["6379:6379"]
+      kafka:
+        # Конфигурация образа по умолчанию: KRaft, один узел, PLAINTEXT на localhost:9092.
+        image: apache/kafka:4.1.0
+        options: >-
+          --health-cmd "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092"
+          --health-interval 10s --health-timeout 10s --health-retries 15 --health-start-period 20s
+        ports: ["9092:9092"]
+    steps:
+      - name: backend not changed — always-report success
+        if: env.CHANGED != 'true'
+        run: echo "src/backend, src/protocol and deploy are unchanged"
+      - if: env.CHANGED == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: env.CHANGED == 'true'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            src/backend/py-monolyth/uv.lock
+            src/protocol/uv.lock
+      # Тестовая база flt_test (SYS-10-R4): pytest работает только с базой *_test.
+      - name: create test database
+        if: env.CHANGED == 'true'
+        env:
+          PGPASSWORD: flt_ci # pragma: allowlist secret
+        run: psql -h 127.0.0.1 -U flt -d flt -c 'CREATE DATABASE flt_test'
+      - name: tests with coverage (backend)
+        if: env.CHANGED == 'true'
+        working-directory: src/backend/py-monolyth
+        env:
+          PG_HOST: 127.0.0.1
+          PG_PORT: "5432"
+          PG_USERNAME: flt
+          PG_PASSWORD: flt_ci # pragma: allowlist secret
+          PG_DATABASE: flt_test
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: "6379"
+          REDIS_DB: "15"
+          KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9092
+          PYTEST_ADDOPTS: --junitxml=reports/junit.xml --cov-report=xml:reports/coverage.xml
+        run: |
+          uv python install
+          make install
+          make test-cov
+      - name: tests (flt-protocol)
+        if: env.CHANGED == 'true'
+        working-directory: src/protocol
+        run: uv run --locked pytest
+      - if: always() && env.CHANGED == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backend-reports
+          path: src/backend/py-monolyth/reports/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  frontend:
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CHANGED: ${{ needs.changes.outputs.frontend }}
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - name: frontend not changed — always-report success
+        if: env.CHANGED != 'true'
+        working-directory: .
+        run: echo "src/frontend is unchanged"
+      - if: env.CHANGED == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Версия pnpm — из поля packageManager, версия Node — из .nvmrc (ADR-005).
+      - if: env.CHANGED == 'true'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: src/frontend/package.json
+      - if: env.CHANGED == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: src/frontend/.nvmrc
+          cache: pnpm
+          cache-dependency-path: src/frontend/pnpm-lock.yaml
+      - name: install
+        if: env.CHANGED == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: lint
+        if: env.CHANGED == 'true'
+        run: pnpm lint
+      - name: format check
+        if: env.CHANGED == 'true'
+        run: pnpm format:check
+      - name: type check
+        if: env.CHANGED == 'true'
+        run: pnpm check-types
+      - name: i18n keys complete
+        if: env.CHANGED == 'true'
+        run: pnpm i18n:check
+      - name: generated API client is up to date
+        if: env.CHANGED == 'true'
+        run: pnpm api:check
+      - name: tests with coverage
+        if: env.CHANGED == 'true'
+        run: pnpm test:cov
+      - name: build
+        if: env.CHANGED == 'true'
+        run: pnpm build
+      - name: build storybook (SYS-12-R2)
+        if: env.CHANGED == 'true'
+        run: pnpm build-storybook
+      - if: env.CHANGED == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frontend-dist
+          path: src/frontend/dist/
+          retention-days: 7
+
+  docs:
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CHANGED: ${{ needs.changes.outputs.docs }}
+    # Проверки flt-tools (specs check, traceability check) добавляются в Г.10 (SYS-12-R14, R15).
+    steps:
+      - name: docs not changed — always-report success
+        if: env.CHANGED != 'true'
+        run: echo "Analytics, markdown files and workflows are unchanged"
+      - if: env.CHANGED == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: env.CHANGED == 'true'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: false
+      # Те же хуки и версии, что в .pre-commit-config.yaml (SYS-12-R8, R12).
+      - name: markdownlint (Analytics, CLAUDE.md, README.md)
+        if: env.CHANGED == 'true'
+        run: uvx --from "pre-commit==${PRE_COMMIT_VERSION}" pre-commit run markdownlint-cli2 --all-files
+      - name: actionlint (.github/workflows)
+        if: env.CHANGED == 'true'
+        run: uvx --from "pre-commit==${PRE_COMMIT_VERSION}" pre-commit run actionlint --all-files
+
+  # Тяжёлая ступень (ADR-011 §3.1, SYS-12-R3, SYS-05-R54): стенд из N = 3 инстансов роли api за
+  # HAProxy (docker-compose.yml + docker-compose.ci.yml, проект flt) и тесты pytest -m n_instances.
+  # Выполняется при run_full и изменении backend или deploy; иначе отчитывается успехом (always-report).
+  # До job-а images (Г.10) образ flt-backend собирается здесь же (make stand-up с --build).
+  stand-n3:
+    needs: changes
+    runs-on: ${{ vars.CI_HEAVY_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    env:
+      RUN_STAND: ${{ needs.changes.outputs.run_full == 'true' && (needs.changes.outputs.backend == 'true' || needs.changes.outputs.deploy == 'true') }}
+    steps:
+      - name: stand not required — always-report success
+        if: env.RUN_STAND != 'true'
+        run: echo "run_full is false or src/backend, src/protocol and deploy are unchanged"
+      - if: env.RUN_STAND == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: env.RUN_STAND == 'true'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: src/backend/py-monolyth/uv.lock
+      - name: install (backend test dependencies)
+        if: env.RUN_STAND == 'true'
+        working-directory: src/backend/py-monolyth
+        run: |
+          uv python install
+          make install
+      # docker compose -p flt … --profile ci up -d --wait --build --scale api=3 (SYS-05-R44).
+      - name: stand up (api x3 behind HAProxy, worker x2, migrate)
+        if: env.RUN_STAND == 'true'
+        working-directory: src/backend/py-monolyth
+        run: make stand-up
+      - name: tests on N instances (pytest -m n_instances)
+        if: env.RUN_STAND == 'true'
+        working-directory: src/backend/py-monolyth
+        env:
+          PYTEST_ADDOPTS: --junitxml=reports/junit-n3.xml
+        run: make stand-test
+      - name: compose logs
+        if: failure() && env.RUN_STAND == 'true'
+        working-directory: src/backend/py-monolyth
+        run: |
+          mkdir -p reports
+          make stand-logs > reports/compose-logs.txt 2>&1 || true
+      - if: always() && env.RUN_STAND == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stand-n3-reports
+          path: src/backend/py-monolyth/reports/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: stand down
+        if: always() && env.RUN_STAND == 'true'
+        working-directory: src/backend/py-monolyth
+        run: make stand-down
+
+  # Сводная проверка для branch protection (ADR-011 §3.3, SYS-12-R4): падает, если любой
+  # job упал, отменён или пропущен. Тяжёлый job stand-n3 при run_full == false отчитывается успехом
+  # пустым шагом (always-report), поэтому его пропуск тоже ошибка (SYS-12-R4). В Г.10 добавляются
+  # job-ы tools, contracts, commits, dependency-audit, images, e2e, helm.
+  ci-ok:
+    needs: [changes, backend-quality, architecture, backend-tests, frontend, docs, stand-n3]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: all required jobs succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'EOF'
+          import json
+          import os
+          import sys
+
+          needs = json.loads(os.environ["NEEDS"])
+          bad = {name: result["result"] for name, result in needs.items() if result["result"] != "success"}
+          print("job results:", {name: result["result"] for name, result in needs.items()})
+          if bad:
+              print("failed, cancelled or skipped:", bad)
+              sys.exit(1)
+          EOF

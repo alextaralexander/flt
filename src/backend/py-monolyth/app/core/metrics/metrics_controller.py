@@ -1,28 +1,20 @@
-"""Контроллер для сервисных метрик и health-check endpoint'ов.
+"""Служебные эндпоинты `/v1/health`, `/v1/ready`, `/v1/metrics` (ADR-010, OQ-62).
 
-`/health`, `/ready`, `/metrics` открыты (их опрашивают probes и Prometheus);
-`/info` и `/system-metrics` раскрывают сведения о сборке и хосте — закрыты
-permissions (см. `MetricsPermissions`).
+Открыты без авторизации: их опрашивают HAProxy, probes и Prometheus; снаружи они
+недоступны, так как лежат вне `/api` (ADR-012). `/v1/info` и `/v1/system-metrics`
+boilerplate удалены (ADR-010). Readiness по ролям — этап 1 Г.9.
 """
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, Security, status
+from fastapi import APIRouter, Depends, Response, status
 from prometheus_client import CONTENT_TYPE_LATEST
 
-from app.core.metrics.metrics_schema import (
-    HealthStatusResponse,
-    ReadinessStatusResponse,
-    ServiceInfoResponse,
-    SystemMetricsResponse,
-)
+from app.core.metrics.metrics_schema import HealthStatusResponse, ReadinessStatusResponse
 from app.core.metrics.metrics_service import MetricsService
-from app.core.security.permissions import MetricsPermissions
-from app.core.security.schemas import UserSecuritySchema
-from app.core.security.security import auth_user
 
 
-router = APIRouter(tags=["metrics"])
+router = APIRouter(prefix="/v1", tags=["service"])
 
 MetricsServiceDep = Annotated[MetricsService, Depends()]
 
@@ -76,49 +68,3 @@ async def ready_check(service: MetricsServiceDep) -> ReadinessStatusResponse:
     """
     result = await service.get_readiness_status()
     return ReadinessStatusResponse(payload=result)
-
-
-@router.get(
-    "/info",
-    status_code=status.HTTP_200_OK,
-    summary="Service information",
-    description="Service information",
-    operation_id="get_service_info",
-)
-async def service_info(
-    user: Annotated[
-        UserSecuritySchema,
-        Security(auth_user(permissions_to_check=[MetricsPermissions.GET_SERVICE_INFO])),
-    ],
-    service: MetricsServiceDep,
-) -> ServiceInfoResponse:
-    """Получение информации о сервисе (версия сборки, коммит) — требует permission.
-
-    Returns:
-        Информация о сервисе.
-    """
-    result = await service.get_service_info()
-    return ServiceInfoResponse(payload=result)
-
-
-@router.get(
-    "/system-metrics",
-    status_code=status.HTTP_200_OK,
-    summary="System metrics",
-    description="System metrics",
-    operation_id="get_system_metrics",
-)
-async def system_metrics(
-    user: Annotated[
-        UserSecuritySchema,
-        Security(auth_user(permissions_to_check=[MetricsPermissions.GET_SYSTEM_METRICS])),
-    ],
-    service: MetricsServiceDep,
-) -> SystemMetricsResponse:
-    """Получение системных метрик (CPU/память хоста) — требует permission.
-
-    Returns:
-        Системные метрики.
-    """
-    result = await service.get_system_metrics()
-    return SystemMetricsResponse(payload=result)

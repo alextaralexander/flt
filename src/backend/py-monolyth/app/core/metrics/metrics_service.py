@@ -1,18 +1,10 @@
-"""Сервис сервисных метрик: Prometheus, health/readiness, сведения о сборке."""
+"""Сервис служебных эндпоинтов: метрики Prometheus, liveness и readiness."""
 
-import os
-import platform
 import time
 
-import psutil
 from prometheus_client import generate_latest
 
-from app.core.metrics.metrics_schema import (
-    HealthStatusSchema,
-    ReadinessStatusSchema,
-    ServiceInfoSchema,
-    SystemMetricsSchema,
-)
+from app.core.metrics.metrics_schema import HealthStatusSchema, ReadinessStatusSchema
 
 
 class MetricsService:
@@ -37,27 +29,4 @@ class MetricsService:
         return ReadinessStatusSchema(
             status="ready",
             timestamp=time.time(),
-        )
-
-    @staticmethod
-    async def get_system_metrics() -> SystemMetricsSchema:
-        """CPU и память процесса/хоста (psutil)."""
-        cpu_percent = psutil.cpu_percent()
-        memory = psutil.virtual_memory()
-
-        return SystemMetricsSchema(
-            cpu_usage_percent=cpu_percent,
-            memory_usage_percent=memory.percent,
-            memory_available_mb=memory.available / (1024 * 1024),
-            memory_total_mb=memory.total / (1024 * 1024),
-        )
-
-    @staticmethod
-    async def get_service_info() -> ServiceInfoSchema:
-        """Версия сборки, коммит и версия Python."""
-        return ServiceInfoSchema(
-            version=os.getenv("APP_VERSION", "1.0.0"),
-            git_commit=os.getenv("GIT_COMMIT", "unknown"),
-            build_time=os.getenv("BUILD_TIME", "unknown"),
-            python_version=platform.python_version(),
         )

@@ -1,8 +1,7 @@
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { useDisclosure } from '@/hooks/use-disclosure';
-
-import { Button } from '../button';
+import { Button } from '@/components/ui/button/button';
 import {
   Drawer,
   DrawerClose,
@@ -11,7 +10,8 @@ import {
   DrawerHeader,
   DrawerTrigger,
   DrawerTitle,
-} from '../drawer';
+} from '@/components/ui/drawer/drawer';
+import { useDisclosure } from '@/hooks/use-disclosure';
 
 type FormDrawerProps = {
   isDone: boolean;
@@ -28,6 +28,7 @@ export const FormDrawer = ({
   triggerButton,
   submitButton,
 }: FormDrawerProps) => {
+  const { t } = useTranslation();
   const { close, open, isOpen } = useDisclosure();
 
   React.useEffect(() => {
@@ -58,7 +59,7 @@ export const FormDrawer = ({
         <DrawerFooter>
           <DrawerClose asChild>
             <Button variant="outline" type="submit">
-              Close
+              {t('ui.close')}
             </Button>
           </DrawerClose>
           {submitButton}

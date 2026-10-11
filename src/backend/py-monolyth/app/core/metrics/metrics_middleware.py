@@ -1,6 +1,6 @@
 """HTTP-middleware сбора Prometheus-метрик (количество и латентность запросов).
 
-Метка `endpoint` — шаблон маршрута (`/v1/my_entity/{obj_id}`), а не сырой путь:
+Метка `endpoint` — шаблон маршрута (`/api/v1/<module>/<resources>/{obj_id}`), а не сырой путь:
 сырые пути с UUID/ID дают неограниченный рост числа серий (cardinality explosion).
 Несматченные пути (404 от сканеров и опечаток) схлопываются в одну серию `unmatched`.
 """
@@ -60,7 +60,7 @@ class PrometheusMiddleware:
         finally:
             duration = time.perf_counter() - start_time
             # FastAPI кладёт сматченный маршрут в scope["route"] во время роутинга.
-            # path_format — шаблон маршрута с префиксом его роутера (`/my_entity/{obj_id}`),
+            # path_format — шаблон маршрута с префиксом его роутера (`/<resources>/{obj_id}`),
             # но без префиксов include_router (`/v1`): для метрик важна ограниченность
             # набора значений, а не дословный внешний путь.
             route = scope.get("route")

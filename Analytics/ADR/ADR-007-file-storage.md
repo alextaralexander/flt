@@ -166,7 +166,7 @@ Shared kernel даёт миксин SQLAlchemy `StoredFileMixin` и Pydantic-с�
 
 Выбрано (в) — решение оркестратора 2026-10-10. Отвергнуты: (б) — снятие префикса меняет канонический путь запроса, который входит в подпись SigV4, и ломает presigned URL (подписывать «путь без префикса» и вставлять префикс после — хрупкий обходной приём); (а) — требует DNS-записи и сертификата с дополнительным SAN до выбора домена и делает загрузку cross-origin с CORS. Фрагмент конфигурации HAProxy (окончательная — ADR-012, `deploy/config/haproxy/haproxy.cfg`):
 
-```
+```text
 frontend fe_https
     acl is_s3            path_beg /flt-
     acl s3_method_ok     method GET HEAD PUT POST

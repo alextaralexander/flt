@@ -1,4 +1,4 @@
-import * as React from 'react';
+import type * as React from 'react';
 import { type FieldError } from 'react-hook-form';
 
 import { Error } from './error';

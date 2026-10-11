@@ -1,7 +1,7 @@
-import { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import * as React from 'react';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/button/button';
 import { useDisclosure } from '@/hooks/use-disclosure';
 
 import {

@@ -1,6 +1,6 @@
-import * as React from 'react';
+import type * as React from 'react';
 
-import { Head } from '../seo';
+import { Head } from '@/components/seo/head';
 
 type ContentLayoutProps = {
   children: React.ReactNode;

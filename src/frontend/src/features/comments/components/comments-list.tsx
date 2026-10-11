@@ -1,11 +1,11 @@
 import { ArchiveX } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { MDPreview } from '@/components/ui/md-preview';
-import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button/button';
+import { MDPreview } from '@/components/ui/md-preview/md-preview';
+import { Spinner } from '@/components/ui/spinner/spinner';
 import { useUser } from '@/lib/auth';
 import { POLICIES, Authorization } from '@/lib/authorization';
-import { User } from '@/types/api';
+import type { User } from '@/types/api';
 import { formatDate } from '@/utils/format';
 
 import { useInfiniteComments } from '../api/get-comments';
@@ -49,7 +49,7 @@ export const CommentsList = ({ discussionId }: CommentsListProps) => {
           <li
             aria-label={`comment-${comment.body}-${index}`}
             key={comment.id || index}
-            className="w-full bg-white p-4 shadow-sm"
+            className="w-full bg-white p-4 shadow-xs"
           >
             <Authorization
               policyCheck={POLICIES['comment:delete'](

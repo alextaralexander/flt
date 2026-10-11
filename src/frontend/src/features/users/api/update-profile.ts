@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { api } from '@/lib/api-client';
 import { useUser } from '@/lib/auth';
-import { MutationConfig } from '@/lib/react-query';
+import type { MutationConfig } from '@/lib/react-query';
 
 export const updateProfileInputSchema = z.object({
   email: z.string().min(1, 'Required').email('Invalid email'),

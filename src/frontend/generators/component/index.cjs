@@ -35,20 +35,19 @@ module.exports = {
       !answers.feature || answers.feature === 'components'
         ? 'src/components/{{folder}}'
         : 'src/features/{{feature}}/components';
+    // Barrel-файлы index.ts запрещены (ADR-005, 3.6): импорт напрямую из файла
     return [
       {
         type: 'add',
-        path: componentGeneratePath + '/{{kebabCase name}}/index.ts',
-        templateFile: 'generators/component/index.ts.hbs',
-      },
-      {
-        type: 'add',
-        path: componentGeneratePath + '/{{kebabCase name}}/{{kebabCase name}}.tsx',
+        path:
+          componentGeneratePath + '/{{kebabCase name}}/{{kebabCase name}}.tsx',
         templateFile: 'generators/component/component.tsx.hbs',
       },
       {
         type: 'add',
-        path: componentGeneratePath + '/{{kebabCase name}}/{{kebabCase name}}.stories.tsx',
+        path:
+          componentGeneratePath +
+          '/{{kebabCase name}}/{{kebabCase name}}.stories.tsx',
         templateFile: 'generators/component/component.stories.tsx.hbs',
       },
     ];

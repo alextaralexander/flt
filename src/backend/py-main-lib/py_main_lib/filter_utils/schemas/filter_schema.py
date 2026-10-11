@@ -4,7 +4,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Callable, Dict, Generic, List, Literal, TypeVar
 
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from sqlalchemy.orm import DeclarativeMeta, Query
 
 from py_main_lib.entities.alchemy import BaseEntityModel
@@ -51,8 +51,7 @@ class Pagination(BaseModel):
     total_pages: int
     page: int
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 FilterFuncType = Callable[..., Query]

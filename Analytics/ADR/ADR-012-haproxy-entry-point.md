@@ -3,7 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Статус | accepted |
-| Версия | 1.0 |
+| Версия | 1.1 |
 | Дата | 2026-10-10 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-10 (PR #2) |
@@ -34,7 +34,7 @@
 - **Плюсы**:
   - один файл конфигурации, различия — только значения переменных окружения; паритет compose и Helm буквальный;
   - `server-template` подхватывает новые инстансы при `--scale` и HPA без перезагрузки;
-  - активные проверки `/v1/ready` исключают инстанс за ~6 с, WebSocket и REST различаются таймаутами в одном frontend;
+  - активные проверки `/v1/ready` исключают инстанс за ~4 с, WebSocket и REST различаются таймаутами в одном frontend;
   - встроенный `prometheus-exporter` и stats page — без дополнительных контейнеров (ADR-010).
 - **Минусы**:
   - HAProxy не умеет отдавать статику и выполнять ACME-челлендж сам (в 3.2 ACME-клиент экспериментальный): для сертификатов нужен certbot-контейнер, для статики — Nginx (он и так в составе);
@@ -83,7 +83,7 @@
 | Маршрут (ACL) | Backend | Назначение | Условие включения |
 |---|---|---|---|
 | `path_beg /api/` | `be_api` — инстансы монолита роли `api`, порт 8000 | REST `/api/v1/<module>/...` (ADR-004); путь не переписывается | всегда |
-| `path_beg /ws/` | `be_api_ws` — те же инстансы, таймауты tunnel | WebSocket фронтенда `/ws` и локального агента `/ws/agent` (ADR-004, ADR-008) | всегда |
+| `path_beg /ws/` или `path /ws` | `be_api_ws` — те же инстансы, таймауты tunnel | WebSocket фронтенда `/ws` и локального агента `/ws/agent` (ADR-004, ADR-008) | всегда |
 | `path_beg /.well-known/acme-challenge/` | `be_frontend` (Nginx отдаёт webroot certbot) | ACME HTTP-01 | `.if defined(FLT_TLS_DOMAIN)` |
 | `path_beg /api/docs`, `path_beg /api/redoc`, `path /api/openapi.json` | — | документация API: `http-request deny deny_status 404` | всегда на prod; на local и dev открыты (`.if defined(FLT_EXPOSE_DOCS)`) |
 | `path_beg /flt-` | `be_minio` — `${MINIO_HOST}:9000`, таймауты 600 с | presigned URL и публичные объекты MinIO path-style: все бакеты называются `flt-<module>` (ADR-007); путь и `Host` не переписываются, поэтому подпись SigV4 остаётся валидной; ACL: методы `GET HEAD PUT POST`, на уровне бакета — только `POST` | `.if defined(MINIO_HOST)` |
@@ -125,6 +125,7 @@ defaults
     option  redispatch
     retries 2
     timeout connect      5s
+    timeout check        1s
     timeout client       30s
     timeout server       60s
     timeout http-request 10s
@@ -143,7 +144,7 @@ frontend fe_http
     http-request redirect scheme https code 301 unless acme
     .else
     default_backend be_frontend
-    use_backend be_api_ws if { path_beg /ws/ }
+    use_backend be_api_ws if { path_beg /ws/ } || { path /ws }
     use_backend be_api    if { path_beg /api/ }
     .endif
 
@@ -199,7 +200,7 @@ frontend fe_plain
     compression algo gzip
     compression type application/json text/plain
 
-    use_backend be_api_ws if { path_beg /ws/ }
+    use_backend be_api_ws if { path_beg /ws/ } || { path /ws }
     use_backend be_api    if { path_beg /api/ }
     .if defined(LIVEKIT_HOST)
     use_backend be_livekit if { path_beg /livekit/ }
@@ -213,7 +214,7 @@ backend be_api
     balance roundrobin
     option httpchk GET /v1/ready
     http-check expect status 200
-    default-server inter 2s fall 3 rise 2 resolvers platform init-addr libc,none
+    default-server inter 2s fastinter 500ms fall 3 rise 2 resolvers platform init-addr libc,none
     # путь не переписывается: монолит обслуживает /api/v1/<module>/... сам (ADR-004)
     server-template api 1-10 "${API_HOST}":8000 check
 
@@ -222,7 +223,7 @@ backend be_api_ws
     option httpchk GET /v1/ready
     http-check expect status 200
     timeout server 1h
-    default-server inter 2s fall 3 rise 2 resolvers platform init-addr libc,none
+    default-server inter 2s fastinter 500ms fall 3 rise 2 resolvers platform init-addr libc,none
     server-template api 1-10 "${API_HOST}":8000 check
 
 backend be_frontend
@@ -278,7 +279,7 @@ listen stats
 ### 3.5. Балансировка, проверки и таймауты
 
 - `balance roundrobin`, без `cookie` и `stick on` — sticky-сессий нет.
-- Проверка `GET /v1/ready` каждые 2 с, инстанс снимается после 3 неудач (`fall 3`, ≈ 6 с) и возвращается после 2 успехов (`rise 2`); ответ 503 readiness (ADR-010) считается неудачей.
+- Проверка `GET /v1/ready` каждые 2 с, после первой неудачи — каждые 0,5 с (`fastinter 500ms`), таймаут проверки 1 с (`timeout check 1s`); инстанс снимается после 3 неудач (`fall 3`, ≈ 4 с, в пределах 10 с SYS-05-R41) и возвращается после 2 успехов (`rise 2`); ответ 503 readiness (ADR-010) считается неудачей. Без `fastinter` и `timeout check` остановленный инстанс снимался за 9–12 с (выявлено на стенде N3, PR #5).
 - Таймауты: `connect 5s`, `client 30s`, `server 60s` для REST (длительные операции идут через Kafka и WebSocket, SYS-04), `tunnel 1h` для WebSocket `/ws`, `/ws/agent` и `/livekit/*` (клиент и агент шлют ping раз в 30 с — SYS-04; `timeout tunnel` сбрасывается трафиком), `server 600s` для `/flt-*` (крупные загрузки), `http-request 10s` против slowloris.
 - При остановке инстанса: readiness отвечает 503 и инстанс снимается с балансировки, активным стримам даётся `SHUTDOWN_GRACE_SECONDS=30` (ADR-009), затем WebSocket-соединения закрываются кодом 1012 — клиент переподключается к другому инстансу и восстанавливает состояние (SYS-04, SYS-05); REST-запросы в полёте к мёртвому инстансу повторяются HAProxy (`option redispatch`, `retries 2`) только если соединение не установилось; запросы с уже отправленным телом не повторяются (идемпотентность — зона SYS-03).
 - `maxconn 4096` в `global` (OQ-13: 300 WebSocket и 100 пользователей — запас десятикратный); лимит на backend — `maxconn 1000` на сервер (uvicorn без воркеров-процессов, `--limit-concurrency` задаёт SYS-11).
@@ -364,3 +365,4 @@ listen stats
 | 0.1 | 2026-10-10 | Claude | Черновик | proposed |
 | 0.2 | 2026-10-10 | Claude | Решения оркестратора: `/api/*` без переписывания пути и без `ROOT_PATH` (монолит обслуживает `/api/v1/<module>`, `/api/docs`, `/api/openapi.json`); служебные `/v1/*` вне `/api`; MinIO по путям `/flt-*` без переписывания (вместо `s3.<домен>`); `/ws/*` включает `/ws/agent`; `/livekit/*` — единственный маршрут со снятием префикса; исключение TURN/TLS 5349 (ADR-015); health-check только по `api`. Согласование с ADR-004 (`python -m app`), ADR-005 (`pnpm dev`, прокси `/flt-*`), ADR-007, ADR-009 (graceful shutdown), ADR-011 (smoke-проверки) | proposed |
 | 1.0 | 2026-10-10 | пользователь | Принят без изменений (PR #2, слияние в main) | accepted |
+| 1.1 | 2026-10-11 | пользователь | Без изменения решения, уточнения по стенду N3 (PR #5): маршрут WebSocket покрывает и `/ws` без завершающего слеша; `timeout check 1s` и `fastinter 500ms` — исключение остановленного инстанса за ≈ 4 с (SYS-05-R41) | accepted |

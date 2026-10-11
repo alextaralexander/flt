@@ -1,0 +1,18 @@
+# Согласованные исключения из запрета состояния процесса (SYS-05-R1, SYS-05-R2).
+# Порядок согласования — SYS-05, раздел 6: вопрос в Analytics/open-questions.md → решение человека →
+# строка в таблице раздела 6 → запись здесь со ссылкой на строку. Тест падает, если запись
+# ссылается на несуществующий файл, имя или функцию (test_allowlist_entries_exist).
+
+# SYS-05-R2: полные имена функций `app/core` и `configs` с @functools.lru_cache / cache / cached_property.
+functools_cache = []
+
+# SYS-05-R1: пары (файл, имя уровня модуля), которым разрешено изменяться после старта процесса.
+module_state = [
+    # Ленивые дескрипторы внешних ресурсов процесса (пул соединений, клиент Redis), а не данные
+    # запросов: создаются при первом обращении, освобождаются в lifespan роли. Строки в таблице
+    # раздела 6 SYS-05 пока нет — вынесено в отчёт этапа 1 Г.2 для согласования на G1.
+    { file = "app/core/dao/db_helpers/db_connection.py", name = "_engine", reason = "пул соединений PostgreSQL процесса (SYS-05 §6)" },
+    { file = "app/core/dao/db_helpers/db_connection.py", name = "_session_maker", reason = "фабрика сессий поверх пула процесса (SYS-05 §6)" },
+    { file = "app/core/dao/caching/redis_conn.py", name = "_redis_client", reason = "клиент Redis процесса (SYS-05 §6)" },
+    { file = "app/core/dao/caching/redis_conn.py", name = "_redis_client_loop", reason = "event loop клиента Redis процесса (SYS-05 §6)" },
+]

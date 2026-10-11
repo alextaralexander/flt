@@ -149,6 +149,30 @@ export const authHandlers = [
     );
   }),
 
+  // Демо-бэкенд не выпускает refresh-токены: обновление сессии всегда
+  // отклоняется, и клиент переходит на экран входа (ADR-006)
+  http.post(`${env.API_URL}/auth/refresh`, async () => {
+    await networkDelay();
+    return HttpResponse.json(
+      {
+        messages: {
+          INFO: [],
+          WARNING: [],
+          ERROR: [
+            {
+              code: 'identity.refresh_invalid',
+              message: 'Refresh token is missing',
+              details: {},
+            },
+          ],
+        },
+        payload: null,
+        request_id: '00000000-0000-7000-8000-000000000000',
+      },
+      { status: 401 },
+    );
+  }),
+
   http.get(`${env.API_URL}/auth/me`, async ({ cookies }) => {
     await networkDelay();
 

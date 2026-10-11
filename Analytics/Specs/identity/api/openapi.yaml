@@ -1,0 +1,230 @@
+openapi: 3.1.0
+info:
+  title: FLT identity API
+  version: 1.0.0
+  description: >-
+    Контракт модуля identity. Версия 1.0.0 — объём этапа 1 (Г.5, ADR-006 раздел 3.9): вход, обновление токена,
+    выход, текущий пользователь, публичные ключи. Операции этапов 2 и 3 добавляются в ТЗ VIS-04, VIS-05, ADM-01.
+servers:
+  - url: /
+tags:
+  - name: identity
+paths:
+  /api/v1/auth/login:
+    post:
+      operationId: identity_login
+      tags: [identity]
+      summary: Вход по email и паролю
+      security: []
+      x-flt-public: true
+      x-flt-idempotency-exempt: true
+      x-flt-permission: "identity:auth:login"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IdentityLoginRequest" }
+      responses:
+        "200":
+          description: >-
+            Успешный вход. Клиент web получает cookie __Host-flt_access, flt_refresh, __Host-flt_csrf
+            и тело IdentityAuthWebResponse; клиент mobile — пару токенов IdentityAuthTokensResponse.
+          headers:
+            Set-Cookie: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: "#/components/schemas/IdentityAuthWebResponse" }
+                  - { $ref: "#/components/schemas/IdentityAuthTokensResponse" }
+        "401": { $ref: "../../_system/openapi-common.yaml#/components/responses/Error" }
+        "403": { $ref: "../../_system/openapi-common.yaml#/components/responses/Error" }
+        "422": { $ref: "../../_system/openapi-common.yaml#/components/responses/Error" }
+        "429": { $ref: "../../_system/openapi-common.yaml#/components/responses/RateLimited" }
+  /api/v1/auth/refresh:
+    post:
+      operationId: identity_refresh
+      tags: [identity]
+      summary: Ротация refresh-токена и выпуск нового access
+      description: >-
+        Клиент web передаёт refresh-токен cookie flt_refresh (Path=/api/v1/auth) и X-CSRF-Token;
+        клиент mobile — тело IdentityRefreshRequest. Повторное использование токена отзывает семейство (identity.refresh_reused).
+      security: []
+      x-flt-public: true
+      x-flt-idempotency-exempt: true
+      x-flt-permission: "identity:auth:refresh"
+      parameters:
+        - $ref: "../../_system/openapi-common.yaml#/components/parameters/CsrfToken"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IdentityRefreshRequest" }
+      responses:
+        "200":
+          description: Новая пара токенов (mobile) или обновлённые cookie (web)
+          headers:
+            Set-Cookie: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: "#/components/schemas/IdentityAuthWebResponse" }
+                  - { $ref: "#/components/schemas/IdentityAuthTokensResponse" }
+        "401": { $ref: "../../_system/openapi-common.yaml#/components/responses/Error" }
+        "403": { $ref: "../../_system/openapi-common.yaml#/components/responses/Error" }
+        "422": { $ref: "../../_system/openapi-common.yaml#/components/responses/Error" }
+  /api/v1/auth/logout:
+    post:
+      operationId: identity_logout
+      tags: [identity]
+      summary: Выход — отзыв текущей сессии
+      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
+      x-flt-idempotency-exempt: true
+      x-flt-permission: "identity:auth:logout"
+      parameters:
+        - $ref: "../../_system/openapi-common.yaml#/components/parameters/CsrfToken"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IdentityRefreshRequest" }
+      responses:
+        "204":
+          description: Сессия отозвана, cookie очищены (Max-Age=0)
+          headers:
+            Set-Cookie: { schema: { type: string } }
+        "401": { $ref: "../../_system/openapi-common.yaml#/components/responses/Error" }
+        "403": { $ref: "../../_system/openapi-common.yaml#/components/responses/Error" }
+  /api/v1/auth/me:
+    get:
+      operationId: identity_getMe
+      tags: [identity]
+      summary: Текущий пользователь, роли и права
+      security: [{ bearerAuth: [] }, { cookieAuth: [] }]
+      x-flt-permission: "identity:me:read"
+      responses:
+        "200":
+          description: Текущий пользователь
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdentityMeResponse" }
+        "401": { $ref: "../../_system/openapi-common.yaml#/components/responses/Error" }
+  /api/v1/auth/.well-known/jwks.json:
+    get:
+      operationId: identity_getJwks
+      tags: [identity]
+      summary: Публичные ключи проверки access JWT (JWKS)
+      security: []
+      x-flt-public: true
+      x-flt-permission: "identity:auth:read"
+      responses:
+        "200":
+          description: Набор ключей Ed25519
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdentityJwks" }
+components:
+  securitySchemes:
+    bearerAuth: { $ref: "../../_system/openapi-common.yaml#/components/securitySchemes/bearerAuth" }
+    cookieAuth: { $ref: "../../_system/openapi-common.yaml#/components/securitySchemes/cookieAuth" }
+  schemas:
+    IdentityClientType:
+      type: string
+      enum: [web, mobile]
+    IdentityRoleCode:
+      type: string
+      enum: [learner, teacher, platform_admin]
+    IdentityUiLanguage:
+      type: string
+      enum: [ru, en, ar]
+    IdentityConsentKind:
+      type: string
+      enum: [personal_data, age_18plus, foreign_llm_transfer, voice_recording, lesson_recording]
+    IdentityLoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 128 }
+        client: { $ref: "#/components/schemas/IdentityClientType", default: web }
+    IdentityRefreshRequest:
+      type: object
+      additionalProperties: false
+      description: Тело для клиента mobile; клиент web тело не передаёт
+      properties:
+        refresh_token: { type: string, minLength: 1, maxLength: 512 }
+    IdentityAuthUser:
+      type: object
+      required: [id, display_name, ui_language, roles, email_verified, age_confirmed]
+      properties:
+        id: { type: string, format: uuid }
+        display_name: { type: [string, "null"], maxLength: 100 }
+        ui_language: { $ref: "#/components/schemas/IdentityUiLanguage" }
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/IdentityRoleCode" }
+        email_verified: { type: boolean }
+        age_confirmed: { type: boolean }
+    IdentityAuthWebResponse:
+      type: object
+      additionalProperties: false
+      required: [user]
+      properties:
+        user: { $ref: "#/components/schemas/IdentityAuthUser" }
+    IdentityAuthTokensResponse:
+      type: object
+      additionalProperties: false
+      required: [access_token, refresh_token, token_type, expires_in, user]
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string, description: "Формат <id>.<secret> (ADR-006, раздел 3.2)" }
+        token_type: { type: string, const: Bearer }
+        expires_in: { type: integer, minimum: 1, description: Срок access-токена в секундах }
+        user: { $ref: "#/components/schemas/IdentityAuthUser" }
+    IdentityConsent:
+      type: object
+      required: [kind, version, granted_at]
+      properties:
+        kind: { $ref: "#/components/schemas/IdentityConsentKind" }
+        version: { type: string }
+        granted_at: { type: string, format: date-time }
+    IdentityMeResponse:
+      type: object
+      required: [id, email, display_name, ui_language, timezone, roles, permissions, email_verified, age_confirmed, consents]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: [string, "null"], format: email }
+        display_name: { type: [string, "null"], maxLength: 100 }
+        ui_language: { $ref: "#/components/schemas/IdentityUiLanguage" }
+        timezone: { type: string, description: "Часовой пояс IANA, например Europe/Moscow" }
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/IdentityRoleCode" }
+        permissions:
+          type: array
+          description: Коды прав <module>:<resource>:<action> для отображения в интерфейсе (SYS-06-R9)
+          items: { type: string, pattern: "^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$" }
+        email_verified: { type: boolean }
+        age_confirmed: { type: boolean }
+        consents:
+          type: array
+          items: { $ref: "#/components/schemas/IdentityConsent" }
+    IdentityJwk:
+      type: object
+      required: [kty, crv, x, kid, alg, use]
+      properties:
+        kty: { type: string, const: OKP }
+        crv: { type: string, const: Ed25519 }
+        x: { type: string, description: Публичный ключ base64url }
+        kid: { type: string }
+        alg: { type: string, const: EdDSA }
+        use: { type: string, const: sig }
+    IdentityJwks:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items: { $ref: "#/components/schemas/IdentityJwk" }

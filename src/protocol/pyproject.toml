@@ -1,0 +1,72 @@
+[project]
+name = "flt-protocol"
+version = "0.1.0"
+description = "Общие схемы протокола агент ↔ платформа FLT (ADR-008)."
+requires-python = ">=3.14"
+# Сообщений протокола пока нет (заготовка этапа 1 Г.1): Pydantic v2 добавляется
+# вместе с моделями сообщений на этапе 4 (ADR-008 §3.1, STU-05).
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15",
+    "mypy>=1.17,<2",
+    "pytest>=8.3,<10",
+]
+
+[build-system]
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+# Пакет лежит в корне проекта (src/protocol/flt_protocol), а не в src/.
+module-name = "flt_protocol"
+module-root = ""
+
+# --- Ruff: те же правила, что у backend (src/backend/py-monolyth/pyproject.toml) ----------------
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # bugbear
+    "C4",    # comprehensions
+    "SIM",   # simplify
+    "D",     # pydocstyle: docstring обязателен для каждого модуля, класса и функции
+    "ASYNC", # flake8-async
+    "RUF",   # ruff-specific
+]
+ignore = [
+    # Послабления только по форме docstring, как у backend.
+    "D202", "D205", "D415",
+    # Кириллица в докстрингах и комментариях — норма.
+    "RUF001", "RUF002", "RUF003",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+
+# --- Mypy (strict), как у backend -------------------------------------------------------------
+
+[tool.mypy]
+files = ["flt_protocol", "tests"]
+strict = true
+warn_unreachable = true
+extra_checks = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+
+# --- Pytest ----------------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"

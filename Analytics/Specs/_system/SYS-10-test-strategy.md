@@ -3,7 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Статус | approved |
-| Версия | 1.0 |
+| Версия | 1.1 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-11 (PR #3) |
@@ -76,7 +76,7 @@
 
 ### SYS-10-R4 Тестовая БД `flt_test` (решает OQ-31)
 
-- **Формулировка**: pytest должен работать с отдельной базой PostgreSQL `flt_test` (роль `flt`, тот же экземпляр, что у стенда local) и базой Redis с индексом `15`; оверлей `envs/.test.env` должен задавать `PG_DATABASE=flt_test`, `REDIS_DB=15`, `TEST_MODE=true`, а сессионная фикстура `db_migrate` должна отказываться работать, если `TEST_MODE` не установлен или имя базы не оканчивается на `_test`; базу `flt_test` создают init-скрипт контейнера PostgreSQL (`deploy/docker-compose/init/01-create-test-db.sql`) для `make compose-up`, `make test-docker` для одноразовых контейнеров и шаг job `backend-tests` в CI.
+- **Формулировка**: pytest должен работать с отдельной базой PostgreSQL `flt_test` (роль `flt`, тот же экземпляр, что у стенда local) и базой Redis с индексом `15`; оверлей `envs/.test.env` должен задавать `PG_DATABASE=flt_test`, `REDIS_DB=15`, `TEST_MODE=true`, а сессионная фикстура `db_migrate` должна отказываться работать, если `TEST_MODE` не установлен или имя базы не оканчивается на `_test`; базу `flt_test` создают init-скрипт контейнера PostgreSQL (`deploy/docker-compose/postgres/init/01-create-test-db.sql`, каталог по SYS-11-R17) для `make compose-up`, `make test-docker` для одноразовых контейнеров и шаг job `backend-tests` в CI.
 - **Обоснование**: OQ-31 (planned → SYS-10): pytest и стенд local делят базу `flt` и схему `ms_py_test`, запуск тестов стирает локальные данные (CLAUDE.md «Отличия проекта от boilerplate», п. 10). Выбран вариант 1 из карточки OQ-31 (отдельная база в том же PostgreSQL): он совпадает со способом запуска в CI (`services:` PostgreSQL и Redis — ADR-011) и не требует Docker при локальном запуске; вариант 2 (testcontainers) отвергнут, так как дублирует `services:` CI вторым механизмом, замедляет старт и требует Docker API у pytest; `make test-docker` (вариант 3) сохраняется как способ запуска без локальной инфраструктуры и расширяется контейнером Redis. Схема `ms_py_test` исчезает вместе с переходом на схемы модулей (ADR-003). Параллельный запуск `pytest-xdist` не применяется на этапе 1 (сессионные миграции); при появлении потребности каждый worker получает базу `flt_test_<worker_id>` тем же механизмом.
 - **Проверка**: тест фикстуры `tests/core/test_test_db_guard.py` (будет создан: `db_migrate` поднимает `AssertionError` при `PG_DATABASE=flt`); `make test` документирован в `tests/README.md`; CI `backend-tests` создаёт базу командой `psql -c 'CREATE DATABASE flt_test'` перед pytest; тест `test_local_stand_db_untouched` (будет создан: после сессии тестов в базе `flt` нет схем модулей, созданных тестами).
 - **Применимость**: backend, deploy, CI.
@@ -264,7 +264,7 @@
 
 - **Формулировка**: Тесты масштабируемости должны писаться по методике SYS-05 (R44–R54): каталог `tests/n_instances/<module>/`, маркер `n_instances`, фикстуры стенда N3, шесть сценариев из таблицы 6.7 ТЗ; запуск — `make stand-up && make stand-test` локально и job `stand-n3` в CI; в покрытие не входят.
 - **Обоснование**: CLAUDE.md «Тесты масштабируемости»; SYS-05.
-- **Проверка**: SYS-05-R45, R53, R54; цели `stand-up`, `stand-test`, `stand-down` в корневом `Makefile` (SYS-12).
+- **Проверка**: SYS-05-R45, R53, R54; цели `stand-up`, `stand-test`, `stand-down` и `test-n3` в `src/backend/py-monolyth/Makefile` — единой точке входа бэкенда (уточнено при реализации Г.3, PR #5).
 - **Применимость**: backend, tests, CI.
 
 ### SYS-10-R29 Нестабильные тесты: без ретраев, карантин со сроком
@@ -453,7 +453,7 @@ OTLP_EXPORTER_ENDPOINT=
 ```
 
 ```sql
--- deploy/docker-compose/init/01-create-test-db.sql — выполняется контейнером postgres при первом старте
+-- deploy/docker-compose/postgres/init/01-create-test-db.sql — выполняется контейнером postgres при первом старте
 CREATE DATABASE flt_test OWNER flt;
 ```
 
@@ -674,3 +674,4 @@ test('[STU-19-AC4] recalculates progress', { annotation: { type: 'quarantine', d
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: профиль compose `test` → `ci` (профили `dev`, `ci`, `prod`, `recording` — SYS-11); кассеты — `tests/fixtures/llm_cassettes/<module>/`, `tests/fixtures/speech_cassettes/`, фикстуры заглушки — `tests/fixtures/llm_stub/`, тест секретов — `tests/fixtures/test_cassettes_have_no_secrets.py` (как в SYS-08-R25); R18 — режимы `scripted` (по умолчанию) и `replay` по фикстуре теста вместо «только replay», `CassetteMissingError`, ключ кассеты по SYS-08; пример теста прав — путь `learning-plan` и код права `learning_plan:plans:create` (SYS-06); раздел 4 — путь кассет | draft |
 | 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
+| 1.1 | 2026-10-11 | пользователь | Уточнения по реализации Г.3 (PR #5): путь init-скрипта — `deploy/docker-compose/postgres/init/` (как в SYS-11); R28 — цели стенда в `Makefile` бэкенда | approved |

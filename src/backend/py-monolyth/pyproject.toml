@@ -1,8 +1,8 @@
 [project]
-name = "python-boilerplate"
+name = "flt-backend"
 version = "0.1.0"
-description = "Production FastAPI boilerplate: Kafka (FastStream), AsyncAPI, OTel, Vault."
-requires-python = ">=3.12"
+description = "FLT backend: modular monolith on FastAPI, Kafka (FastStream), PostgreSQL, Redis."
+requires-python = ">=3.14"
 # Диапазоны вместо жёстких пинов: точные версии фиксирует uv.lock,
 # обновление — `uv lock --upgrade` (или Renovate) + прогон `make check`.
 dependencies = [
@@ -29,12 +29,11 @@ dependencies = [
     "python-multipart>=0.0.20",
     "PyJWT>=2.10,<3",
     "cryptography>=44",
-    "hvac>=2.3,<3",
     # HTTP client
     "httpx>=0.28,<1",
     # Metrics, tracing, monitoring
     "prometheus-client>=0.21,<1",
-    "psutil>=7,<8",
+    # Клиент поиска shared kernel (ADR-014, этап 1 Г.4); логи в OpenSearch доставляет Fluent Bit (ADR-010).
     "opensearch-py>=3.1,<4",
     "opentelemetry-api>=1.38,<2",
     "opentelemetry-sdk>=1.38,<2",
@@ -56,16 +55,17 @@ dependencies = [
     # CLI
     "typer>=0.16,<1",
     "fastapi-cli>=0.0.7,<1",
+    # Внутренняя библиотека: path-зависимость uv (ADR-001, OQ-69), её зависимости учитывает uv.lock.
+    "py-main-lib",
 ]
-
-# Внутренняя py_main_lib ставится отдельно (private registry / локальный boilerplate)
-# и намеренно не указана здесь — см. CLAUDE.md → "Зависимости и окружение".
 
 [dependency-groups]
 dev = [
     # Линт + форматирование (один инструмент вместо black/isort/autoflake/flake8)
     "ruff>=0.9",
     "mypy>=1.17,<2",
+    # Границы модулей (ADR-002): контракты в .importlinter, запуск — `make arch`
+    "import-linter>=2.3,<3",
     "pre-commit>=4.1,<5",
     # Тесты
     "pytest>=8.3,<9",
@@ -75,17 +75,26 @@ dev = [
     "pytest-env>=1.1,<2",
     "pytest-mock>=3.14,<4",
     "coverage>=7.6,<8",
+    # Детерминизм (SYS-10-R37): запрет сети кроме loopback, случайный порядок с фиксированным seed
+    "pytest-socket>=0.7,<1",
+    "pytest-randomly>=3.16,<5",
+    # Фабрики тестовых объектов (SYS-10-R16) и заглушки HTTP внешних сервисов (SYS-10-R20)
+    "polyfactory>=2.18,<4",
+    "respx>=0.22,<1",
     # Безопасность (G6)
     "bandit>=1.8,<2",
     "detect-secrets>=1.5,<2",
     # Стабы для типизации
-    "types-psutil>=7",
     "types-PyYAML>=6",
 ]
 
 [tool.uv]
 # Это сервис, а не публикуемый пакет: uv только управляет окружением и lock-файлом.
 package = false
+
+[tool.uv.sources]
+# py-main-lib правится в этом репозитории и ставится из соседней папки (в Docker — из build-context-а).
+py-main-lib = { path = "../py-main-lib" }
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "app/core/dao/db_helpers/migrations"]
@@ -96,8 +105,9 @@ skips = ["B101"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
-extend-exclude = ["app/core/dao/db_helpers/migrations/versions"]
+target-version = "py314"
+# Ревизии Alembic модулей генерирует autogenerate — их не форматируем и не линтим.
+extend-exclude = ["app/modules/*/migrations/versions"]
 
 [tool.ruff.lint]
 select = [
@@ -149,6 +159,7 @@ lines-after-imports = 2
 
 [tool.mypy]
 plugins = ['pydantic.mypy']
+python_version = "3.14"
 exclude = ['.git', '__pycache__', 'migrations']
 # strict включает разом disallow_untyped_defs/calls, disallow_any_generics,
 # warn_return_any, warn_unused_ignores, no_implicit_reexport и остальной набор;
@@ -166,14 +177,8 @@ module = "py_main_lib.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# Декоратор FastStream `@router.subscriber(**kwargs)` теряет типы при распаковке
-# kwargs (subscriber_config) — сами хендлеры при этом полностью типизированы.
-module = ["app.brokers.kafka.subscribers"]
-disallow_untyped_decorators = false
-
-[[tool.mypy.overrides]]
-# hvac и aiokafka не публикуют стабы / py.typed.
-module = ["hvac.*", "aiokafka.*"]
+# aiokafka не публикует стабы / py.typed.
+module = ["aiokafka.*"]
 ignore_missing_imports = true
 
 # --- Pytest / coverage ---------------------------------------------------------
@@ -184,13 +189,23 @@ testpaths = ["tests"]
 pythonpath = ["."]
 # Pytest-оверлей поверх стенда local; envs/test/ — деплой-стенд, к pytest отношения не имеет.
 env_files = ["envs/.test.env"]
-addopts = "-v"
+# SYS-10-R12, R37: неизвестный маркер — ошибка; сокеты только к loopback (pytest-socket);
+# случайный порядок с фиксированным seed (pytest-randomly; для поиска порядковых
+# зависимостей seed переопределяется: `-p randomly --randomly-seed=<n>`).
+addopts = "-v --strict-markers --durations=20 -p randomly --randomly-seed=20261010 --disable-socket --allow-hosts=127.0.0.1,::1,localhost"
 # Один event loop на всю сессию: engine/клиенты создаются на уровне модулей
 # и не переживают смену loop-а (раньше это делала кастомная фикстура event_loop).
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 markers = [
+    "ac(id): критерий приёмки ТЗ, например ac('STU-18-AC3') (SYS-10-R12)",
+    "req(id): требование системной спецификации, например req('SYS-05-R12') (SYS-10-R12)",
+    "n_instances: тест на стенде N3 (SYS-05-R45); пропускается без --stand-url",
+    "smoke: смоук-набор «ходячего скелета» (SYS-10-R31)",
+    "slow(reason): тест длиннее 5 с с обоснованием (SYS-10-R30)",
+    "quarantine(issue, until): карантин нестабильного теста не дольше 14 дней (SYS-10-R29)",
     "no_db: тест не требует подключения к БД",
+    "req(id): требование системной спецификации, например req('SYS-05-R12'); обязателен в tests/architecture (SYS-10)",
 ]
 filterwarnings = [
     "ignore::pluggy.PluggyTeardownRaisedWarning",

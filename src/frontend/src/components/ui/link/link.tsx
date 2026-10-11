@@ -1,4 +1,5 @@
-import { Link as RouterLink, LinkProps } from 'react-router';
+import type { LinkProps } from 'react-router';
+import { Link as RouterLink } from 'react-router';
 
 import { cn } from '@/utils/cn';
 

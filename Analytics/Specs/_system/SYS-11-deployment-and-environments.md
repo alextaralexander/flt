@@ -3,7 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Статус | approved |
-| Версия | 1.0 |
+| Версия | 2.0 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-11 (PR #3) |
@@ -40,7 +40,7 @@
 
 - **Формулировка**: каталог `deploy/` должен иметь структуру ниже; новые файлы развёртывания должны размещаться только в ней (скрипты развёртывания — `deploy/scripts/`, репозиторные инструменты проверки — `src/tools/`, ADR-011).
 
-  ```
+  ```text
   deploy/
     docker-compose/
       docker-compose.yml          # базовый состав + сервисы профилей dev, ci, prod, recording (R4, R5)
@@ -207,7 +207,7 @@
 
 ### SYS-11-R10 Порядок запуска: инфраструктура → `migrate` → `api`, `worker`
 
-- **Формулировка**: сервисы `api`, `worker` и `media-agent` должны зависеть от `migrate` через `depends_on: { migrate: { condition: service_completed_successfully } }`, а `migrate` — от `postgres`, `kafka`, `minio`, `minio-init`, `opensearch`, `qdrant` через `condition: service_healthy` (для `minio-init` — `service_completed_successfully`); `fluent-bit` должен стартовать первым (все сервисы с драйвером `fluentd` зависят от него); `haproxy` зависит от `api` и `frontend` (`service_healthy`); в Helm шаг миграций — Job `flt-migrate` с аннотациями `helm.sh/hook: pre-install,pre-upgrade`, `helm.sh/hook-weight: "10"`, `helm.sh/hook-delete-policy: before-hook-creation`, `backoffLimit: 0`, `activeDeadlineSeconds: 900`, а инициализация MinIO — Job `flt-minio-init` с `pre-install,pre-upgrade` и весом `"5"`; `MIGRATE_ON_START=false` на всех стендах, кроме `local`.
+- **Формулировка**: сервисы `api`, `worker` и `media-agent` должны зависеть от `migrate` через `depends_on: { migrate: { condition: service_completed_successfully } }`, а `migrate` — от `postgres`, `kafka`, `minio`, `minio-init`, `opensearch`, `qdrant` через `condition: service_healthy` (для `minio-init` — `service_completed_successfully`); `fluent-bit` должен стартовать первым (все сервисы с драйвером `fluentd` зависят от него); `haproxy` зависит от `api` и `frontend` (`service_healthy`); в Helm шаг миграций — Job `flt-migrate` с аннотациями `helm.sh/hook: pre-install,pre-upgrade`, `helm.sh/hook-weight: "10"`, `helm.sh/hook-delete-policy: before-hook-creation`, `backoffLimit: 0`, `activeDeadlineSeconds: 900`, а инициализация MinIO — Job `flt-minio-init` с `pre-install,pre-upgrade` и весом `"5"`; инстансы ролей `api` и `worker` миграции при старте не выполняют, настройки `MIGRATE_ON_START` нет (SYS-05-R33).
 - **Обоснование**: CLAUDE.md «Масштабирование и состояние»: «миграции выполняются один раз отдельным шагом, а не каждым инстансом при старте»; ADR-004 §3.5 (роль `migrate` создаёт топики, бакеты, шаблоны индексов — поэтому зависит от Kafka, MinIO, OpenSearch, Qdrant); ADR-010 (Fluent Bit первым).
 - **Проверка**: тест `src/tools/tests/test_compose_dependencies.py` (`<будет создан>`): граф `depends_on` из `docker compose config` содержит перечисленные рёбра с нужными условиями; `helm template` содержит Job с указанными аннотациями (`kubeconform` + проверка аннотаций в `src/tools/tests/test_helm_hooks.py`); smoke Г.8: `docker compose up -d --wait` завершается успешно, `docker compose ps` показывает `migrate` в состоянии `exited (0)`; негативный smoke — `migrate` с ошибкой не даёт стартовать `api`.
 - **Применимость**: deploy, tests.
@@ -218,8 +218,8 @@
 
   | Контейнер | compose `healthcheck.test` | interval / timeout / retries / start_period | Helm liveness / readiness / startup |
   |---|---|---|---|
-  | `api` | `wget -qO- http://127.0.0.1:8000/v1/ready` | 10s / 3s / 3 / 30s | `GET /v1/health` 10s, `failureThreshold 3` / `GET /v1/ready` 5s / `GET /v1/health` 2s, `failureThreshold 30` |
-  | `worker`, `media-agent` | `wget -qO- http://127.0.0.1:8001/v1/ready` | 10s / 3s / 3 / 30s | как `api` на порту 8001 |
+  | `api` | `python -c` с `urllib.request` на `http://127.0.0.1:8000/v1/ready` (в образе `flt-backend` нет `wget`) | 10s / 3s / 3 / 30s | `GET /v1/health` 10s, `failureThreshold 3` / `GET /v1/ready` 5s / `GET /v1/health` 2s, `failureThreshold 30` |
+  | `worker`, `media-agent` | `python -c` с `urllib.request` на `http://127.0.0.1:8001/v1/ready` | 10s / 3s / 3 / 30s | как `api` на порту 8001 |
   | `haproxy` | `wget -qO- http://127.0.0.1:8404/stats;csv` | 5s / 3s / 3 / 5s | tcp 8404 / `GET /healthz` на 80 (ADR-012) |
   | `frontend` | `wget -qO- http://127.0.0.1:8080/healthz` | 10s / 3s / 3 / 5s | `GET /healthz` / `GET /healthz` |
   | `postgres` | `pg_isready -U $POSTGRES_USER -d flt` | 5s / 5s / 20 / 10s | `exec pg_isready` / то же |
@@ -387,7 +387,7 @@
 | Модуль | Что меняется |
 |---|---|
 | все | переменные настроек модуля с префиксом `<MODULE>_` (ADR-002) добавляются в `.env.template` и `values.yaml` одновременно; новый секрет — таблица ADR-013 §3.1 + `.env.template` + `ExternalSecret`; новый топик, бакет, индекс — создаёт роль `migrate`, контейнеры не меняются; новый контейнер — только через `changed`-версию SYS-11 и CLAUDE.md |
-| shared kernel | `configs/stands.py` — четыре стенда R3; `APP_ROLE`, `WORKER_HTTP_PORT`, `MIGRATE_ON_START`, `FORWARDED_ALLOW_IPS`, `SHUTDOWN_GRACE_SECONDS`; фабрика Redis standalone/Sentinel (ADR-003); команда `python -m cli list-settings` для теста R12; readiness по ролям (ADR-010) |
+| shared kernel | `configs/stands.py` — четыре стенда R3; `APP_ROLE`, `WORKER_HTTP_PORT`, `FORWARDED_ALLOW_IPS`, `SHUTDOWN_GRACE_SECONDS`; фабрика Redis standalone/Sentinel (ADR-003); команда `python -m cli list-settings` для теста R12; readiness по ролям (ADR-010) |
 | `identity`, `llm_gateway` (этап 1) | переменные `IDENTITY_*`, `LLM_GATEWAY_*` в `envs/<stand>/` и `.env.template`; секреты по ADR-013 |
 | `classroom` (этап 6) | `LIVEKIT_HOST`, порты LiveKit в R13, профиль `recording`, Redis база `1` |
 | `materials`, `llm_gateway` (этап 5) | контейнер `embeddings` при решении OQ-59, `EMBEDDINGS_URL` |
@@ -454,7 +454,7 @@ services:
     environment: { APP_ROLE: api, STAND_NAME: ${STAND_NAME:-dev}, TZ: UTC }
     expose: ["8000"]
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8000/v1/ready"]
+      test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(urllib.request.urlopen('http://127.0.0.1:8000/v1/ready', timeout=2).status != 200)"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -751,3 +751,5 @@ verify_through_haproxy        # /healthz 200, jwks 200, 3× be_api UP
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R4 — контейнер `blackbox-exporter` (профиль `prod`, внешняя доступность и срок TLS-сертификата), тег `minio/mc` закрепляется вместе с тегом сервера; R5 — `blackbox-exporter` в профиле `prod`; R6 — chart `prometheus-community` для `blackbox-exporter`; R13 — порт 9115 внутри сети, проверка снятия `X-Instance-Id` в HAProxy (SYS-05-R5); R18 — второе хранилище — OQ-79, RPO и RTO — по SYS-02; R23 п. 9 — шифрование диска — SYS-02-R61, OQ-80; раздел 9 — статус OQ-17, добавлены OQ-79, OQ-80; раздел 9 — OQ-63 resolved | draft |
 | 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
+| 2.0 | 2026-10-11 | Claude | R10 и раздел 4: настройка `MIGRATE_ON_START` удалена по SYS-05-R33 и SDD_plan.md (Г.1); на утверждение в PR Г.1 | review |
+| 2.0 | 2026-10-11 | пользователь | Утверждена (PR #5); при утверждении: healthcheck ролей `api`, `worker`, `media-agent` — `python -c` с `urllib.request`, в образе `flt-backend` нет `wget` | approved |

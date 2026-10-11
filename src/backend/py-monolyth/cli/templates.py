@@ -1,12 +1,17 @@
-"""Шаблоны генерируемого кода.
+"""Шаблоны генерируемого кода модулей (ADR-002, раздел 3.7).
 
-Шаблоны используют токены `__PASCAL__`, `__SNAKE__`, `__UPPER__`, `__CONST__`, `__VALUE__`
-и подставляются простым `str.replace`, чтобы не экранировать фигурные скобки Python-кода.
+Токены подставляются простым `str.replace`, чтобы не экранировать фигурные скобки Python-кода:
+- модуль: `__MODULE__` (snake_case), `__MODULE_PASCAL__`, `__MODULE_UPPER__`, `__MODULE_KEBAB__`;
+- сущность: `__PASCAL__`, `__SNAKE__`, `__KEBAB__`;
+- топик: `__CONST__`, `__VALUE__`, `__PASCAL__`, `__SNAKE__`.
 """
 
 
 def render(template: str, **tokens: str) -> str:
     """Подставить токены вида `__NAME__` в шаблон.
+
+    Длинные токены подставляются раньше коротких, чтобы `__MODULE_UPPER__`
+    не задевался заменой `__MODULE__`.
 
     Args:
         template: Текст шаблона с токенами.
@@ -16,14 +21,215 @@ def render(template: str, **tokens: str) -> str:
         Готовый текст.
     """
     result = template
-    for key, value in tokens.items():
-        result = result.replace(f"__{key}__", value)
+    for key in sorted(tokens, key=len, reverse=True):
+        result = result.replace(f"__{key}__", tokens[key])
     return result
+
+
+# --- Модуль -----------------------------------------------------------------
+
+MODULE_INIT = '''"""Доменный модуль `__MODULE__` (спецификация — Analytics/Specs/__MODULE__/_module.md).
+
+Другие модули импортируют только `app.modules.__MODULE__.public` (ADR-002).
+"""
+'''
+
+
+MODULE_DEFINITION = '''"""Описание модуля `__MODULE__` для shared kernel (ADR-002, раздел 3.2)."""
+
+from app.core.modules import ModuleDefinition
+from app.modules.__MODULE__.api.router import router
+from app.modules.__MODULE__.models import Base
+from app.modules.__MODULE__.permissions import module_permissions
+from app.modules.__MODULE__.settings import __MODULE_PASCAL__Settings
+
+
+module = ModuleDefinition(
+    name="__MODULE__",
+    metadata=Base.metadata,
+    router=router,
+    settings=__MODULE_PASCAL__Settings(),
+    permissions=module_permissions(),
+)
+'''
+
+
+MODULE_PUBLIC_INIT = '''"""Публичный API модуля `__MODULE__`: единственное, что импортируют другие модули (ADR-002).
+
+Сюда реэкспортируются `Protocol` сервисов и фабрики для `Depends()` (`interfaces.py`),
+Pydantic-схемы (`schemas.py`), доменные события (`events.py`), ошибки (`errors.py`)
+и декларации топиков (`topics.py`). Модели SQLAlchemy и репозитории не реэкспортируются.
+"""
+'''
+
+
+MODULE_MODELS_INIT = '''"""Модели модуля `__MODULE__`: все таблицы — в схеме PostgreSQL `__MODULE__` (ADR-002)."""
+
+from sqlalchemy.orm import DeclarativeBase
+
+from app.core.dao.db_helpers.base import module_metadata
+
+
+class Base(DeclarativeBase):
+    """Базовый класс моделей модуля `__MODULE__` (схема `__MODULE__`)."""
+
+    metadata = module_metadata("__MODULE__")
+
+
+# Модели модуля импортируются ниже, чтобы попасть в `Base.metadata` (Alembic, тесты);
+# строки добавляет `make scaffold-entity module=__MODULE__ name=<Entity>`.
+'''
+
+
+MODULE_SETTINGS = '''"""Настройки модуля `__MODULE__` (ADR-002, раздел 3.3).
+
+Префикс переменных — `__MODULE_UPPER___`, файл стенда — `envs/<стенд>/__MODULE___<стенд>.env`.
+Секреты — поля `SecretStr` без значения по умолчанию, только из переменных окружения (ADR-013).
+"""
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from configs.stands import stand_env_file
+
+
+class __MODULE_PASCAL__Settings(BaseSettings):
+    """Настройки модуля `__MODULE__`."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="__MODULE_UPPER___",
+        env_file=stand_env_file("__MODULE__"),
+        extra="ignore",
+    )
+'''
+
+
+MODULE_PERMISSIONS = '''"""Права модуля `__MODULE__`: коды `__MODULE__:<resource>:<action>` (SYS-06, ADR-002).
+
+Классы `<Resource>Permissions` добавляет `make scaffold-entity module=__MODULE__ name=<Entity>` (ниже).
+"""
+
+import sys
+
+
+def module_permissions() -> tuple[str, ...]:
+    """Все коды прав модуля: строковые константы классов `*Permissions` этого файла."""
+    codes = {
+        value
+        for holder_name, holder in vars(sys.modules[__name__]).items()
+        if holder_name.endswith("Permissions") and isinstance(holder, type)
+        for attr, value in vars(holder).items()
+        if attr.isupper() and isinstance(value, str)
+    }
+    return tuple(sorted(codes))
+'''
+
+
+MODULE_API_INIT = '''"""REST-слой модуля `__MODULE__`: роутер и контроллеры ресурсов."""
+'''
+
+
+MODULE_ROUTER = '''"""REST-роутер модуля `__MODULE__`: префикс `/api/v1/__MODULE_KEBAB__` (ADR-004, SYS-03)."""
+
+from fastapi import APIRouter
+
+
+router = APIRouter(prefix="/api/v1/__MODULE_KEBAB__", tags=["__MODULE__"])
+
+# Роутеры ресурсов подключает `make scaffold-entity module=__MODULE__ name=<Entity>` (ниже).
+'''
+
+
+MODULE_LAYER_INIT = '''"""Слой `__LAYER__` модуля `__MODULE__`."""
+'''
+
+
+MODULE_ALEMBIC_SECTION = """
+[__MODULE__]
+script_location = app/core/dao/db_helpers/migrations
+prepend_sys_path = .
+path_separator = os
+version_locations = app/modules/__MODULE__/migrations/versions
+flt_module = __MODULE__
+"""
+
+
+MODULE_ENV_FILE = """# Настройки модуля __MODULE__ на стенде __STAND__ (префикс __MODULE_UPPER___, ADR-002).
+# Только несекретные параметры; секреты — переменные окружения (ADR-013).
+"""
+
+
+MODULE_TESTS_INIT = '''"""Тесты модуля `__MODULE__` (зеркалят app/modules/__MODULE__)."""
+'''
+
+
+MODULE_TESTS_CONFTEST = '''"""Фикстуры тестов модуля `__MODULE__` (общие фикстуры — tests/conftest.py)."""
+'''
+
+
+MODULE_TESTS_PACKAGE_INIT = '''"""Тесты доменных модулей: tests/modules/<module> зеркалит app/modules/<module>."""
+'''
+
+
+REGISTRY = '''"""Реестр доменных модулей монолита (ADR-002, раздел 3.2).
+
+Порядок — порядок зависимостей из карты модулей SYS-01: нижние уровни раньше.
+Файл правит скаффолдер (`make scaffold-module name=<module>` дописывает модуль в конец);
+место модуля в порядке подтверждается спецификацией модуля. Реестр читают
+`create_app()`, роль `worker`, общий `env.py` Alembic и `python -m cli list-modules`.
+"""
+
+MODULES: tuple[str, ...] = __MODULES__
+'''
+
+
+IMPORTLINTER_BEGIN = "; >>> modules: contracts 1-3 (generated by `python -m cli add-module`)"
+IMPORTLINTER_END = "; <<< modules"
+
+# Контракты 1–3 ADR-002 (раздел 3.5) для модулей реестра; `__MODULES_LIST__` — модули в порядке
+# реестра, `__LAYERS_LIST__` — они же сверху вниз (верхний уровень зависимостей — первым).
+IMPORTLINTER_MODULE_CONTRACTS = """
+; 1. Модули независимы; разрешён только публичный API соседа.
+[importlinter:contract:modules-public-api-only]
+name = Доменные модули независимы, кроме импортов из public
+type = independence
+modules =
+__MODULES_LIST__
+ignore_imports =
+    app.modules.** -> app.modules.*.public
+    app.modules.** -> app.modules.*.public.**
+unmatched_ignore_imports_alerting = none
+
+; 2. Направление зависимостей между модулями — по реестру (карта SYS-01): верхние могут
+;    импортировать public нижних, но не наоборот; циклы между модулями запрещены.
+[importlinter:contract:modules-dependency-order]
+name = Зависимости между модулями направлены по карте модулей SYS-01
+type = layers
+containers =
+    app.modules
+layers =
+__LAYERS_LIST__
+exhaustive = true
+exhaustive_ignores =
+    registry
+
+; 3. Слои внутри каждого модуля — как в boilerplate (отсутствующий слой допустим).
+[importlinter:contract:module-internal-layers]
+name = Слои внутри модуля: api и brokers -> public -> services -> dao -> models
+type = layers
+containers =
+__CONTAINERS_LIST__
+layers =
+    (api) | (brokers)
+    (public)
+    (services)
+    (dao)
+    (models)
+"""
 
 
 # --- REST-сущность ---------------------------------------------------------
 
-ENTITY_SCHEMA = '''"""Schema для `__PASCAL__`."""
+ENTITY_SCHEMA = '''"""Схемы REST-ресурса `__PASCAL__` модуля `__MODULE__`."""
 
 from uuid import UUID
 
@@ -94,12 +300,34 @@ class Filtered__PASCAL__Response(SuccessfulResponseV1):
 '''
 
 
-ENTITY_DAO = '''"""Репозиторий для работы с `__PASCAL__`."""
+ENTITY_MODEL = '''"""Модель `__PASCAL__` модуля `__MODULE__` (таблица `__MODULE__.__SNAKE__`)."""
+
+from py_main_lib.entities.alchemy import BaseEntityModel
+from sqlalchemy import String
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.modules.__MODULE__.models import Base
+
+
+class __PASCAL__(BaseEntityModel, Base):
+    """Сущность `__PASCAL__`; служебные колонки — `BaseEntityModel` (база `EntityBase` — этап 1 Г.4)."""
+
+    __tablename__ = "__SNAKE__"
+
+    name: Mapped[str] = mapped_column(String, comment="Название")
+'''
+
+
+ENTITY_MODEL_IMPORT = """from app.modules.__MODULE__.models.__SNAKE__ import __PASCAL__  # noqa: E402, F401
+"""
+
+
+ENTITY_DAO = '''"""Репозиторий `__PASCAL__` модуля `__MODULE__`."""
 
 from py_main_lib.dao.base_dao import BaseDAO
 
-from app.api.schemas.__SNAKE___schema import Create__PASCAL__Schema, Update__PASCAL__Schema
-from app.core.dao.models import __PASCAL__
+from app.modules.__MODULE__.models.__SNAKE__ import __PASCAL__
+from app.modules.__MODULE__.schemas.__SNAKE___schema import Create__PASCAL__Schema, Update__PASCAL__Schema
 
 
 class __PASCAL__DAO(BaseDAO[__PASCAL__, Create__PASCAL__Schema, Update__PASCAL__Schema]):
@@ -109,7 +337,7 @@ class __PASCAL__DAO(BaseDAO[__PASCAL__, Create__PASCAL__Schema, Update__PASCAL__
 '''
 
 
-ENTITY_SERVICE = '''"""Сервис бизнес-логики для `__PASCAL__`."""
+ENTITY_SERVICE = '''"""Сервис бизнес-логики `__PASCAL__` модуля `__MODULE__`."""
 
 from typing import Any, ClassVar
 from uuid import UUID
@@ -120,14 +348,14 @@ from py_main_lib.security.schemas import UserSecuritySchema
 from py_main_lib.services.base_crud_service import BaseService
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dao.__SNAKE___dao import __PASCAL__DAO
-from app.api.schemas.__SNAKE___schema import (
+from app.core.exceptions import ModelNotFoundInDatabaseError
+from app.modules.__MODULE__.dao.__SNAKE___dao import __PASCAL__DAO
+from app.modules.__MODULE__.models.__SNAKE__ import __PASCAL__
+from app.modules.__MODULE__.schemas.__SNAKE___schema import (
     Create__PASCAL__Schema,
     __PASCAL__Schema,
     Update__PASCAL__Schema,
 )
-from app.core.dao.models import __PASCAL__
-from app.core.exceptions import ModelNotFoundInDatabaseError
 
 
 class __PASCAL__Service(BaseService[__PASCAL__Schema, Create__PASCAL__Schema, Update__PASCAL__Schema]):
@@ -153,7 +381,7 @@ class __PASCAL__Service(BaseService[__PASCAL__Schema, Create__PASCAL__Schema, Up
             ModelNotFoundInDatabaseError: объект не найден или помечен удалённым.
         """
         async with transaction_context(session):
-            obj = await self.dao.get_by_id(obj_id, session)
+            obj: __PASCAL__ | None = await self.dao.get_by_id(obj_id, session)
             if not obj:
                 raise ModelNotFoundInDatabaseError(model_id=str(obj_id), model=__PASCAL__)
             if obj.is_deleted:
@@ -162,7 +390,7 @@ class __PASCAL__Service(BaseService[__PASCAL__Schema, Create__PASCAL__Schema, Up
 '''
 
 
-ENTITY_CONTROLLER = '''"""Контроллер для `__PASCAL__`."""
+ENTITY_CONTROLLER = '''"""REST-контроллер ресурса `__PASCAL__` модуля `__MODULE__`."""
 
 from typing import Annotated
 from uuid import UUID
@@ -171,20 +399,20 @@ from fastapi import APIRouter, Depends, Response, Security, status
 from py_main_lib.filter_utils.schemas.filter_schema import FilterSchema
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas.__SNAKE___schema import (
+from app.core.dao.db_helpers.db_connection import get_session
+from app.core.security.schemas import UserSecuritySchema
+from app.core.security.security import auth_user
+from app.modules.__MODULE__.permissions import __PASCAL__Permissions
+from app.modules.__MODULE__.schemas.__SNAKE___schema import (
     Create__PASCAL__Schema,
     Filtered__PASCAL__Response,
     __PASCAL__Response,
     Update__PASCAL__Schema,
 )
-from app.api.services.__SNAKE___service import __PASCAL__Service
-from app.core.dao.db_helpers.db_connection import get_session
-from app.core.security.permissions import __PASCAL__Permissions
-from app.core.security.schemas import UserSecuritySchema
-from app.core.security.security import auth_user
+from app.modules.__MODULE__.services.__SNAKE___service import __PASCAL__Service
 
 
-router = APIRouter(prefix="/__SNAKE__", tags=["__SNAKE___api"])
+router = APIRouter(prefix="/__KEBAB__s", tags=["__MODULE__"])
 
 ServiceDep = Annotated[__PASCAL__Service, Depends()]
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -195,7 +423,7 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
     status_code=status.HTTP_201_CREATED,
     summary="Создание нового объекта",
     description="Создание нового объекта",
-    operation_id="create___SNAKE__",
+    operation_id="__MODULE___create___SNAKE__",
 )
 async def create_object(
     create_dto: Create__PASCAL__Schema,
@@ -226,7 +454,7 @@ async def create_object(
     status_code=status.HTTP_200_OK,
     summary="Фильтрация объектов по заданным критериям",
     description="Фильтрация объектов по заданным критериям",
-    operation_id="filter___SNAKE__",
+    operation_id="__MODULE___filter___SNAKE__",
 )
 async def get_filtered_list(
     filter_dto: FilterSchema,
@@ -257,7 +485,7 @@ async def get_filtered_list(
     status_code=status.HTTP_200_OK,
     summary="Получение объекта по ID",
     description="Получение объекта по ID",
-    operation_id="get___SNAKE__",
+    operation_id="__MODULE___get___SNAKE__",
 )
 async def get_object(
     obj_id: UUID,
@@ -288,7 +516,7 @@ async def get_object(
     status_code=status.HTTP_200_OK,
     summary="Обновление объекта по ID",
     description="Обновление объекта по ID",
-    operation_id="update___SNAKE__",
+    operation_id="__MODULE___update___SNAKE__",
 )
 async def update_object(
     obj_id: UUID,
@@ -321,7 +549,7 @@ async def update_object(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Удаление объекта по ID",
     description="Удаление объекта по ID",
-    operation_id="delete___SNAKE__",
+    operation_id="__MODULE___delete___SNAKE__",
 )
 async def delete_object(
     obj_id: UUID,
@@ -345,26 +573,39 @@ async def delete_object(
 '''
 
 
+ENTITY_ROUTER_INCLUDE = """
+from app.modules.__MODULE__.api.__SNAKE___controller import router as __SNAKE___router  # noqa: E402
+
+
+router.include_router(__SNAKE___router)
+"""
+
+
 ENTITY_PERMISSIONS = '''
 
 class __PASCAL__Permissions:
-    """Права на операции с сущностью `__PASCAL__`."""
+    """Права на ресурс `__SNAKE__s` модуля `__MODULE__`."""
 
-    GET_MODEL = "GET___UPPER__"
-    GET_LIST = "GET___UPPER___LIST"
-    CREATE_MODEL = "CREATE___UPPER__"
-    UPDATE_MODEL = "UPDATE___UPPER__"
-    DELETE_MODEL = "DELETE___UPPER__"
+    GET_MODEL = "__MODULE__:__SNAKE__s:read"
+    GET_LIST = "__MODULE__:__SNAKE__s:read"
+    CREATE_MODEL = "__MODULE__:__SNAKE__s:create"
+    UPDATE_MODEL = "__MODULE__:__SNAKE__s:update"
+    DELETE_MODEL = "__MODULE__:__SNAKE__s:delete"
 '''
 
 
-ENTITY_TEST = '''"""Тесты сервиса `__PASCAL__Service`."""
+ENTITY_TEST = '''"""Тесты сервиса `__PASCAL__Service` модуля `__MODULE__`."""
 
+import pytest
 from py_main_lib.security.schemas import UserSecuritySchema
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas.__SNAKE___schema import Create__PASCAL__Schema
-from app.api.services.__SNAKE___service import __PASCAL__Service
+from app.modules.__MODULE__.schemas.__SNAKE___schema import Create__PASCAL__Schema
+from app.modules.__MODULE__.services.__SNAKE___service import __PASCAL__Service
+
+
+# Маркер трассировки обязателен (SYS-10-R12): тесты фичи помечаются ac("<ID ТЗ>-AC<N>") её критериев.
+pytestmark = pytest.mark.req("SYS-05-R7")
 
 
 class Test__PASCAL__Service:
@@ -395,17 +636,63 @@ class Test__PASCAL__Service:
 
 # --- Kafka-сабскрайбер ------------------------------------------------------
 
-SUBSCRIBER_SCHEMA = '''"""Схема Kafka-сообщения из топика `__CONST__`."""
+BROKERS_INIT = '''"""Kafka-слой модуля `__MODULE__`: роутер, подписчики, топики, схемы сообщений (ADR-004)."""
+'''
+
+
+BROKERS_ROUTER = '''"""Kafka-роутер модуля `__MODULE__`; подключается брокером в ролях `worker` и `all` (ADR-004)."""
+
+from faststream.kafka import KafkaRouter
+
+
+kafka_router = KafkaRouter()
+'''
+
+
+BROKERS_TOPICS = '''"""Топики Kafka, которые слушает модуль `__MODULE__` (формат имён — ADR-004, SYS-04)."""
+
+from enum import StrEnum
+
+
+class __MODULE_PASCAL__Topics(StrEnum):
+    """Входящие топики модуля `__MODULE__`."""
+'''
+
+
+BROKERS_MESSAGES_INIT = '''"""Схемы Kafka-сообщений модуля `__MODULE__`."""
+'''
+
+
+BROKERS_SERVICES_INIT = '''"""Обработчики сообщений Kafka модуля `__MODULE__`: разбор сообщения и вызов `services/`."""
+'''
+
+
+BROKERS_SUBSCRIBERS = '''"""Подписчики Kafka модуля `__MODULE__`: тонкие хендлеры, логика — в сервисах (ADR-002).
+
+Сервисы приходят через `Depends()` FastStream — их можно подменить в тестах.
+"""
+
+from typing import Annotated
+
+from faststream import Depends
+
+from app.core.logging import bind_broker_log_context
+from app.modules.__MODULE__.brokers.router import kafka_router
+from app.modules.__MODULE__.brokers.topics import __MODULE_PASCAL__Topics
+'''
+
+
+SUBSCRIBER_SCHEMA = '''"""Схема Kafka-сообщения топика `__VALUE__`."""
 
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.brokers.template_schema import BaseMessageHeaderSchema, BaseMessageSchema
+from app.core.kafka.base_message import BaseMessageHeaderSchema, BaseMessageSchema
 
 
 class __PASCAL__HeaderSchema(BaseMessageHeaderSchema):
-    """Header для `__PASCAL__Schema`."""
+    """Header для `__PASCAL__Message`."""
 
     message_type: Literal["__PASCAL__.message_type"] = Field(
         description="Название типа сообщения.",
@@ -413,63 +700,75 @@ class __PASCAL__HeaderSchema(BaseMessageHeaderSchema):
     )
 
 
-class PayloadIn__PASCAL__Schema(BaseModel):
-    """Payload для `__PASCAL__Schema`."""
+class PayloadIn__PASCAL__Message(BaseModel):
+    """Payload для `__PASCAL__Message`."""
 
     value: str = Field(
         description="Описание полезной нагрузки.",
     )
 
 
-class __PASCAL__Schema(BaseMessageSchema):
-    """Схема сообщения из топика `__CONST__`."""
+class __PASCAL__Message(BaseMessageSchema):
+    """Сообщение из топика `__VALUE__`."""
 
     header: __PASCAL__HeaderSchema = Field(
-        description="Служебный заголовок сообщения топика `__CONST__`.",
+        description="Служебный заголовок сообщения.",
         default_factory=lambda: __PASCAL__HeaderSchema(),
     )
-    payload: PayloadIn__PASCAL__Schema = Field(
-        description="Полезная нагрузка сообщения топика `__CONST__`.",
+    payload: PayloadIn__PASCAL__Message = Field(
+        description="Полезная нагрузка сообщения.",
     )
 '''
 
 
-SUBSCRIBER_SERVICE = '''"""Сервис обработки сообщения из Kafka-топика `__CONST__`."""
+SUBSCRIBER_SERVICE = '''"""Сервис обработки сообщения из топика `__VALUE__` модуля `__MODULE__` (слой brokers)."""
 
-from app.brokers.kafka.schemas.subscriber_messages.__SNAKE___schema import __PASCAL__Schema
+from app.modules.__MODULE__.brokers.messages.__SNAKE___message import __PASCAL__Message
 
 
-class __PASCAL__Service:
+class __PASCAL__MessageService:
     """Бизнес-логика обработки сообщения `__CONST__`."""
 
-    @staticmethod
-    async def process(message: __PASCAL__Schema) -> None:
-        """Обработать сообщение из топика `__CONST__`.
+    async def process(self, message: __PASCAL__Message) -> None:
+        """Обработать сообщение из топика `__VALUE__`.
 
-        TODO: реализовать бизнес-логику.
+        TODO: реализовать бизнес-логику (идемпотентность через inbox — этап 1 Г.4).
         """
-        ...
 '''
+
+
+# Импорты хендлера вставляются в верхний блок импортов subscribers.py (ruff их сортирует).
+SUBSCRIBER_HANDLER_IMPORTS = """from app.modules.__MODULE__.brokers.messages.__SNAKE___message import __PASCAL__Message
+from app.modules.__MODULE__.brokers.services.__SNAKE___service import __PASCAL__MessageService
+"""
 
 
 SUBSCRIBER_HANDLER = '''
 
-from app.brokers.kafka.schemas.subscriber_messages.__SNAKE___schema import __PASCAL__Schema  # noqa: E402
-from app.brokers.kafka.services.__SNAKE___service import __PASCAL__Service  # noqa: E402
-
-
 @kafka_router.subscriber(
-    KafkaSubscriberTopics.__CONST__,
+    __MODULE_PASCAL__Topics.__CONST__,
+    group_id="flt.__MODULE__.__SNAKE__",
+    auto_offset_reset="earliest",
     title="__CONST__",
-    description="Сгенерированный subscriber для топика __CONST__.",
-    **kafka_settings.subscriber_config.get_subscriber_kwargs(),
+    description="Обработчик топика __VALUE__.",
 )
-async def subscriber_to___SNAKE__(
-    __SNAKE___message: __PASCAL__Schema,
-    service: Annotated[__PASCAL__Service, Depends()],
+async def handle___SNAKE__(
+    message: __PASCAL__Message,
+    service: Annotated[__PASCAL__MessageService, Depends(__PASCAL__MessageService)],
 ) -> None:
-    """Subscriber для топика `__CONST__`."""
-    bind_broker_log_context(__SNAKE___message)
+    """Обработчик сообщений топика `__VALUE__`."""
+    bind_broker_log_context(message)
 
-    await service.process(__SNAKE___message)
+    await service.process(message)
 '''
+
+
+SUBSCRIBER_TOPIC_MEMBER = """
+    __CONST__ = "__VALUE__"
+"""
+
+
+# Импорт subscribers регистрирует хендлеры на kafka_router модуля.
+MODULE_KAFKA_IMPORTS = """from app.modules.__MODULE__.brokers import subscribers as _subscribers  # noqa: F401
+from app.modules.__MODULE__.brokers.router import kafka_router
+"""

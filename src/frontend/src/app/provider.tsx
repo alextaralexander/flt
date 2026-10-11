@@ -1,17 +1,26 @@
+import { DirectionProvider } from '@radix-ui/react-direction';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import * as React from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
-import { HelmetProvider } from 'react-helmet-async';
 
 import { MainErrorFallback } from '@/components/errors/main';
-import { Notifications } from '@/components/ui/notifications';
-import { Spinner } from '@/components/ui/spinner';
+import { Notifications } from '@/components/ui/notifications/notifications';
+import { Spinner } from '@/components/ui/spinner/spinner';
+import { paths } from '@/config/paths';
+import { setSessionExpiredHandler } from '@/lib/api-client';
 import { AuthLoader } from '@/lib/auth';
+import { useDirection } from '@/lib/i18n/use-direction';
 import { queryConfig } from '@/lib/react-query';
 
 type AppProviderProps = {
   children: React.ReactNode;
+};
+
+/** Направление для компонентов Radix по языку интерфейса (ADR-005, 3.4). */
+const DirectionRoot = ({ children }: { children: React.ReactNode }) => {
+  const direction = useDirection();
+  return <DirectionProvider dir={direction}>{children}</DirectionProvider>;
 };
 
 export const AppProvider = ({ children }: AppProviderProps) => {
@@ -22,6 +31,16 @@ export const AppProvider = ({ children }: AppProviderProps) => {
       }),
   );
 
+  // Повторный 401 после refresh: сброс кэша `me` и экран входа (ADR-006)
+  React.useEffect(() => {
+    setSessionExpiredHandler(() => {
+      queryClient.setQueryData(['authenticated-user'], null);
+      window.location.assign(
+        paths.auth.login.getHref(window.location.pathname),
+      );
+    });
+  }, [queryClient]);
+
   return (
     <React.Suspense
       fallback={
@@ -30,8 +49,8 @@ export const AppProvider = ({ children }: AppProviderProps) => {
         </div>
       }
     >
-      <ErrorBoundary FallbackComponent={MainErrorFallback}>
-        <HelmetProvider>
+      <DirectionRoot>
+        <ErrorBoundary FallbackComponent={MainErrorFallback}>
           <QueryClientProvider client={queryClient}>
             {import.meta.env.DEV && <ReactQueryDevtools />}
             <Notifications />
@@ -45,8 +64,8 @@ export const AppProvider = ({ children }: AppProviderProps) => {
               {children}
             </AuthLoader>
           </QueryClientProvider>
-        </HelmetProvider>
-      </ErrorBoundary>
+        </ErrorBoundary>
+      </DirectionRoot>
     </React.Suspense>
   );
 };

@@ -1,8 +1,9 @@
-import { CircleAlert, Info } from 'lucide-react';
 import * as React from 'react';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/button/button';
+import { Icon } from '@/components/ui/icon';
 import { useDisclosure } from '@/hooks/use-disclosure';
 
 import {
@@ -29,10 +30,11 @@ export const ConfirmationDialog = ({
   confirmButton,
   title,
   body = '',
-  cancelButtonText = 'Cancel',
+  cancelButtonText,
   icon = 'danger',
   isDone = false,
 }: ConfirmationDialogProps) => {
+  const { t } = useTranslation();
   const { close, open, isOpen } = useDisclosure();
   const cancelButtonRef = React.useRef(null);
 
@@ -59,16 +61,16 @@ export const ConfirmationDialog = ({
           <DialogTitle className="flex items-center gap-2">
             {' '}
             {icon === 'danger' && (
-              <CircleAlert className="size-6 text-red-600" aria-hidden="true" />
+              <Icon name="CircleAlert" className="size-6 text-red-600" />
             )}
             {icon === 'info' && (
-              <Info className="size-6 text-blue-600" aria-hidden="true" />
+              <Icon name="Info" className="size-6 text-blue-600" />
             )}
             {title}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+        <div className="mt-3 text-center sm:ms-4 sm:mt-0 sm:text-start">
           {body && (
             <div className="mt-2">
               <p>{body}</p>
@@ -79,7 +81,7 @@ export const ConfirmationDialog = ({
         <DialogFooter>
           {confirmButton}
           <Button ref={cancelButtonRef} variant="outline" onClick={close}>
-            {cancelButtonText}
+            {cancelButtonText ?? t('ui.cancel')}
           </Button>
         </DialogFooter>
       </DialogContent>

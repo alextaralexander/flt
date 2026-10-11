@@ -3,7 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Статус | approved |
-| Версия | 1.0 |
+| Версия | 1.1 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-11 (PR #4) |
@@ -201,7 +201,6 @@
 | `FORWARDED_ALLOW_IPS` | str | сеть compose | нет | доверие `X-Forwarded-*` от HAProxy (ADR-012) |
 | `FLT_EXPOSE_DOCS` | bool | `false` (`true` на local и dev) | нет | открыть документацию API и не снимать `X-Instance-Id` (SYS-05-R5) |
 | `DEBUG_MODE` | bool | `false` | нет | детали ответа `500` только на local (ADR-013) |
-| `MIGRATE_ON_START` | bool | `false` | нет | миграции при старте запрещены вне pytest (ADR-004) |
 | `SHUTDOWN_GRACE_SECONDS` | int | `30` | нет | время на завершение стримов при остановке |
 | `HTTP_MAX_JSON_BODY_BYTES` | int | `1048576` | нет | лимит тела JSON (SYS-03-R26) |
 | `PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USERNAME` | str, int | по стенду | нет | подключение к PostgreSQL |
@@ -328,3 +327,5 @@
 | 0.1 | 2026-10-11 | Claude | Черновик | draft |
 | 0.1 | 2026-10-11 | Claude | Передан на гейт G1 (PR блока В) | review |
 | 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока В (PR #4) | approved |
+| 1.1 | 2026-10-11 | Claude | Раздел 8: удалена `MIGRATE_ON_START` (SYS-05-R33, реализация Г.1); на утверждение в PR Г.1 | review |
+| 1.1 | 2026-10-11 | пользователь | Утверждена (PR #5) | approved |

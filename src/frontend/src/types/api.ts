@@ -24,6 +24,8 @@ export type User = Entity<{
   role: 'ADMIN' | 'USER';
   teamId: string;
   bio: string;
+  /** Язык интерфейса из профиля (identity, SYS-07-R1). */
+  ui_language?: string;
 }>;
 
 export type AuthResponse = {

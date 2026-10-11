@@ -2,8 +2,15 @@ import * as z from 'zod';
 
 const createEnv = () => {
   const EnvSchema = z.object({
-    API_URL: z.string(),
+    // Относительные адреса: одна сборка на всех стендах, маршрутизация HAProxy (ADR-005, 3.9)
+    API_URL: z.string().optional().default('/api/v1'),
+    WS_URL: z.string().optional().default('/ws'),
     ENABLE_API_MOCKING: z
+      .string()
+      .refine((s) => s === 'true' || s === 'false')
+      .transform((s) => s === 'true')
+      .optional(),
+    ENABLE_DEV_PAGES: z
       .string()
       .refine((s) => s === 'true' || s === 'false')
       .transform((s) => s === 'true')

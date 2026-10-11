@@ -1,0 +1,93 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Renovate репозитория FLT (ADR-001 §3.2, SYS-12-R22): еженедельные обновления всех компонентов.",
+    "Минорные и патч-обновления и пересборка lock-файлов — одним PR; мажорные — отдельный PR на пакет с меткой deps:major;",
+    "CPython, Node и базовые образы Dockerfile — отдельные PR с меткой deps:runtime; автослияние выключено."
+  ],
+  "extends": ["config:recommended", ":dependencyDashboard", "helpers:pinGitHubActionDigests"],
+  "timezone": "Europe/Moscow",
+  "schedule": ["before 6am on monday"],
+  "dependencyDashboard": true,
+  "automerge": false,
+  "platformAutomerge": false,
+  "enabledManagers": [
+    "pep621",
+    "npm",
+    "dockerfile",
+    "docker-compose",
+    "helm-values",
+    "github-actions",
+    "pre-commit",
+    "pyenv",
+    "nvm"
+  ],
+  "pre-commit": {
+    "enabled": true
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"],
+    "commitMessageAction": "Lock file maintenance"
+  },
+  "packageRules": [
+    {
+      "description": "Диапазоны в pyproject.toml и package.json, точные версии — в uv.lock и pnpm-lock.yaml (ADR-001 §3.2 п. 1): обновления внутри диапазона меняют только lock-файл.",
+      "matchManagers": ["pep621", "npm"],
+      "rangeStrategy": "update-lockfile"
+    },
+    {
+      "description": "Минорные и патч-обновления всех менеджеров, кроме runtime-ов, — один PR в неделю (ADR-001 §3.2 п. 3). Инфраструктурные образы docker-compose и helm-values попадают в тот же PR и обновляются одновременно.",
+      "matchManagers": ["pep621", "npm", "docker-compose", "helm-values", "github-actions", "pre-commit"],
+      "matchUpdateTypes": ["minor", "patch", "pin", "pinDigest", "digest"],
+      "groupName": "deps: weekly minor and patch",
+      "groupSlug": "weekly-minor-and-patch"
+    },
+    {
+      "description": "Мажорные обновления — отдельный PR на пакет; Claude выполняет его как мини-задачу: changelog, миграция, make check и CI (ADR-001 §3.2 п. 4).",
+      "matchUpdateTypes": ["major"],
+      "addLabels": ["deps:major"]
+    },
+    {
+      "description": "Runtime-ы: CPython (.python-version, requires-python), Node (.nvmrc, engines) и базовые образы Dockerfile — отдельные PR с меткой deps:runtime; новая линия принимается не раньше X.Y.1 после проверки по методике ADR-001 §1.1.",
+      "matchManagers": ["pyenv", "nvm", "dockerfile"],
+      "addLabels": ["deps:runtime"],
+      "minimumReleaseAge": "30 days"
+    },
+    {
+      "description": "Ограничения версии CPython и Node в pyproject.toml и package.json — тоже runtime: отдельные PR с меткой deps:runtime.",
+      "matchDepTypes": ["requires-python", "engines"],
+      "groupName": null,
+      "addLabels": ["deps:runtime"],
+      "minimumReleaseAge": "30 days"
+    },
+    {
+      "description": "GitHub Actions закреплены по SHA с комментарием версии (SYS-12-R12); новые версии берутся не раньше чем через 30 дней (ADR-001 §3.2 п. 3).",
+      "matchManagers": ["github-actions"],
+      "minimumReleaseAge": "30 days"
+    },
+    {
+      "description": "FastStream: линия 0.7, потолок <0.8 (ADR-001 §3.2 п. 5). Переход на 0.8 — отдельный мажорный PR вместе с py-main-lib и заменой интеграции FastAPI на faststream_fastapi.",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["faststream"],
+      "allowedVersions": "<0.8"
+    },
+    {
+      "description": "SQLAlchemy: потолок <2.1 (ADR-001 §3.2 п. 5); снимается только мажорным PR с обоснованием.",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["sqlalchemy", "SQLAlchemy"],
+      "allowedVersions": "<2.1"
+    },
+    {
+      "description": "Python-клиент redis: потолок <7 (ADR-001 §3.2 п. 5); снимается только мажорным PR с обоснованием. Образ redis не затрагивается.",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["redis"],
+      "allowedVersions": "<7"
+    },
+    {
+      "description": "MinIO: зафиксирован тег последнего опубликованного образа community-редакции до решения OQ-64; Renovate этот образ не обновляет (ADR-001 §3.1, ADR-007 §3.10).",
+      "matchDepNames": ["minio/minio", "quay.io/minio/minio", "minio/mc", "quay.io/minio/mc"],
+      "enabled": false
+    }
+  ]
+}

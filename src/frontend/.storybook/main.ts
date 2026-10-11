@@ -1,12 +1,10 @@
-module.exports = {
-  stories: ['../src/**/*.stories.mdx', '../src/**/*.stories.@(js|jsx|ts|tsx)'],
+import type { StorybookConfig } from '@storybook/react-vite';
 
+// Storybook 10 (ADR-005, 3.2 шаг 6): essentials входят в ядро, test-runner не используется
+const config: StorybookConfig = {
+  stories: ['../src/**/*.mdx', '../src/**/*.stories.@(ts|tsx)'],
   addons: [
-    '@storybook/addon-actions',
     '@storybook/addon-links',
-    '@storybook/node-logger',
-    '@storybook/addon-essentials',
-    '@storybook/addon-interactions',
     '@storybook/addon-docs',
     '@storybook/addon-a11y',
   ],
@@ -14,10 +12,9 @@ module.exports = {
     name: '@storybook/react-vite',
     options: {},
   },
-  docs: {
-    autodocs: 'tag',
-  },
   typescript: {
     reactDocgen: 'react-docgen-typescript',
   },
 };
+
+export default config;
