@@ -26,6 +26,8 @@ HAPROXY_STATS_URL = "http://127.0.0.1:8404/stats;csv"
 # Опрос состояния внешних процессов — шаг 0,5 с (исключение SYS-10-R17 для tests/n_instances).
 POLL_INTERVAL_SECONDS = 0.5
 HTTP_TIMEOUT_SECONDS = 10.0
+# Попытки получить адрес реплики после её перезапуска (20 × POLL_INTERVAL_SECONDS = 10 с).
+DIRECT_ADDRESS_ATTEMPTS = 20
 
 
 # Фабрика клиента прямого доступа к n-му инстансу и действие над контейнером (фикстуры conftest).
@@ -118,11 +120,26 @@ class Stand:
         result: list[Instance] = []
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
             for index in indices:
-                address = (await self.compose("port", "--index", str(index), API_SERVICE, str(API_PORT))).strip()
-                url = f"http://{address}"
-                response = await client.get(f"{url}/v1/health")
-                result.append(Instance(index, f"{prefix}{index}", response.headers[INSTANCE_HEADER], url))
+                url, instance_id = await self._direct_address(client, index)
+                result.append(Instance(index, f"{prefix}{index}", instance_id, url))
         return result
+
+    async def _direct_address(self, client: httpx.AsyncClient, index: int) -> tuple[str, str]:
+        """Адрес и `X-Instance-Id` реплики. После `docker start` опубликованный порт перепривязывается
+        не сразу (порт берётся из диапазона заново), поэтому порт перечитывается до ответа инстанса.
+        """
+        for attempt in range(DIRECT_ADDRESS_ATTEMPTS):
+            address = (await self.compose("port", "--index", str(index), API_SERVICE, str(API_PORT))).strip()
+            url = f"http://{address}"
+            try:
+                response = await client.get(f"{url}/v1/health")
+            except httpx.TransportError:
+                if attempt == DIRECT_ADDRESS_ATTEMPTS - 1:
+                    raise
+                await asyncio.sleep(POLL_INTERVAL_SECONDS)
+                continue
+            return url, response.headers[INSTANCE_HEADER]
+        raise AssertionError("unreachable")
 
     async def haproxy_servers(self, backend: str = API_BACKEND) -> list[ServerState]:
         """Серверы backend-а HAProxy со страницы `stats;csv` (без строки BACKEND)."""

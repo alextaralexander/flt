@@ -61,6 +61,7 @@ dependencies = [
     "py-main-lib",
     "babel>=2.17,<3",
     "aioboto3>=15,<16",
+    "argon2-cffi>=25,<26",
 ]
 
 [dependency-groups]

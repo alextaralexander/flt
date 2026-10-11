@@ -26,6 +26,7 @@ def ddl_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     monkeypatch.setattr(command, "upgrade", lambda *args, **kwargs: calls.append("alembic upgrade"))
     monkeypatch.setattr(MetaData, "create_all", lambda *args, **kwargs: calls.append("create_all"))
     monkeypatch.setattr(entrypoint.uvicorn, "run", lambda *args, **kwargs: calls.append("serve"))
+    monkeypatch.setattr(entrypoint.ApiServer, "run", lambda *args, **kwargs: calls.append("serve"))
     return calls
 
 
