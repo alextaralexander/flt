@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | draft |
-| Версия | 0.2 |
+| Статус | approved |
+| Версия | 1.0 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-11 (PR #3) |
 | Пункт(ы) BRD | VIS-03, STU-01 (STU-01.1–STU-01.4), STU-02, STU-03, STU-05, STU-12, STU-13, STU-25, STU-27, STU-28, STU-36, TCH-02 |
 | Модуль | llm_gateway (владелец); speech (те же интерфейсы для провайдеров речи); local_runtime (транспорт провайдера `local`); все модули, вызывающие LLM (`lessons`, `assessment`, `dictionary`, `learning_plan`, `memorization`, `materials`, `avatar`, `promotion`); shared kernel (`app/core/crypto`, ограничитель, circuit breaker) |
 | Зависимости | ADR-002, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-013, ADR-014; SYS-04 (конверт стрима) |
@@ -587,3 +587,4 @@ finish_reason: stop
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R2 — метод `stream_completion` (ADR-009) и свойство `kind`, сигнатуры — контракт точки SYS-09-R7; R4 — сигнатура `factory` и `ProviderBindingConfig`; R6 — колонка `service` (`llm`/`speech`); R22 — сигнатуры `STTProvider`/`TTSProvider` совпадают с SYS-09-R9, ключи речи хранит `llm_gateway` (OQ-81), исключение раздела 6 для R22 снято; новое R31 `ProviderCredentialsService`; пути тестов N3 — `tests/n_instances/llm_gateway/`; срок хранения `usage_records` 400 суток (SYS-02); раздел 9 — OQ-81; термин и таблица `provider_connection(s)` → `provider_binding(s)` (как в ADR-009 и SYS-01, SYS-06), REST `/api/v1/llm-gateway/provider-bindings`; раздел 4 — `courses` предзаполняет `model_preferences` командой `prefill_model_preferences`, а не прямым вызовом; пути тестов модуля — `tests/modules/llm_gateway/{unit,integration}/` (раскладка SYS-10); R25 — запись кассет только с `LLM_STUB_RECORD_ALLOWED=1` вне CI (как в SYS-10) | draft |
+| 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
