@@ -3,9 +3,10 @@
 Аутентификация HTTP-тестов подменяется в одной точке — `get_current_user`
 через `dependency_overrides` (fixture `overridden_app`).
 
-БД: тесты интеграционные, ходят в PostgreSQL тестового стенда; миграции всех
-модулей реестра (`alembic -n <module> upgrade head`, ADR-002) накатываются один
-раз на сессию и откатываются в конце.
+БД: тесты интеграционные, ходят в отдельную базу `flt_test` и базу Redis 15 того же
+экземпляра, что и стенд local (SYS-10-R4); миграции всех модулей реестра
+(`alembic -n <module> upgrade head`, ADR-002) накатываются один раз на сессию и
+откатываются в конце.
 """
 
 from collections.abc import AsyncGenerator, Iterator
@@ -28,6 +29,7 @@ from app.main import create_app
 from app.modules.registry import MODULES
 from configs.settings import settings
 from tests.settings import test_settings
+from tests.support.stand_guard import assert_test_database
 
 
 # В приложении провайдер настраивает lifespan; тесты (Test*Broker) работают без него,
@@ -83,8 +85,8 @@ def db_migrate() -> Iterator[None]:
     - После тестов откатывает модули в обратном порядке до `base`.
     - Используется на уровне сессии (`scope="session"`), чтобы миграции выполнялись один раз за тестовую сессию.
     """
-    # Защита от запуска на реальной БД: TEST_MODE задаёт только оверлей envs/.test.env.
-    assert test_settings.TEST_MODE, "TEST_MODE не установлен — тесты запущены не на тестовом стенде."
+    # Защита от запуска на рабочей БД: TEST_MODE и база *_test задаёт только оверлей envs/.test.env.
+    assert_test_database(test_mode=test_settings.TEST_MODE, database=settings.PG_DATABASE)
 
     for module in MODULES:
         command.upgrade(alembic_config(module), "head")

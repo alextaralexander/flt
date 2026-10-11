@@ -5,8 +5,11 @@
 #
 # Запуск из корня репозитория:
 #   docker compose -f deploy/docker-compose/docker-compose.yml up -d --build
-# Только инфраструктура (для запуска бэкенда на хосте через `make dev`):
+# Только инфраструктура (для запуска бэкенда на хосте через `make dev`; порты на loopback хоста
+# публикует оверлей docker-compose.local-ports.yml — SYS-11-R13):
 #   make compose-up        # из src/backend/py-monolyth
+# Стенд из N = 3 инстансов за HAProxy (SYS-05-R44) — оверлей docker-compose.ci.yml:
+#   make test-n3           # из src/backend/py-monolyth
 
 name: flt
 
@@ -14,26 +17,24 @@ services:
   postgres:
     image: postgres:18-alpine
     environment:
-      # Значения совпадают со стендом local бэкенда (envs/local/local.env) — только для локальной разработки.
-      POSTGRES_USER: ms_py_test
-      POSTGRES_PASSWORD: ms_py_test
+      # Роль flt и пароль стенда local (envs/local/local.env) — фиксированное тестовое значение
+      # локальной машины (ADR-013); стенд N3 переопределяет пароль в docker-compose.ci.yml.
+      POSTGRES_USER: flt
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-flt_local} # pragma: allowlist secret
       POSTGRES_DB: flt
-    ports:
-      - "5432:5432"
     volumes:
       # Образы postgres 18+ хранят данные в подкаталоге /var/lib/postgresql/<версия>.
       - postgres-data:/var/lib/postgresql
+      # 01-create-test-db.sql создаёт базу pytest flt_test (SYS-10-R4).
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ms_py_test -d flt"]
+      test: ["CMD-SHELL", "pg_isready -U flt -d flt"]
       interval: 5s
       timeout: 5s
       retries: 20
 
   redis:
     image: redis:8-alpine
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -58,8 +59,6 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-    ports:
-      - "9092:9092"
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
       interval: 10s

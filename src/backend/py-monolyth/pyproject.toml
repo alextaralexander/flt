@@ -189,6 +189,12 @@ addopts = "-v"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 markers = [
+    "ac(id): критерий приёмки ТЗ, например ac('STU-18-AC3') (SYS-10-R12)",
+    "req(id): требование системной спецификации, например req('SYS-05-R12') (SYS-10-R12)",
+    "n_instances: тест на стенде N3 (SYS-05-R45); пропускается без --stand-url",
+    "smoke: смоук-набор «ходячего скелета» (SYS-10-R31)",
+    "slow(reason): тест длиннее 5 с с обоснованием (SYS-10-R30)",
+    "quarantine(issue, until): карантин нестабильного теста не дольше 14 дней (SYS-10-R29)",
     "no_db: тест не требует подключения к БД",
 ]
 filterwarnings = [
