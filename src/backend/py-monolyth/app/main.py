@@ -44,6 +44,8 @@ from app.core.metrics.process_metrics import publish_instance_info, register_poo
 from app.core.metrics.readiness import ReadinessProbe, check_postgres
 from app.core.modules import ModuleDefinition, install_modules, load_modules, module_routers
 from app.core.telemetry import SERVICE_NAME, setup_telemetry, stop_telemetry
+from app.core.ws.endpoint import create_ws_router
+from app.core.ws.hub import WsHub
 from app.modules.registry import MODULES
 from configs.settings import AppRole, settings
 
@@ -76,6 +78,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         if worker is not None:
             await stack.enter_async_context(worker.start_lifespan_context())
         yield
+        # Соединения /ws закрываются кодом 1012 до освобождения Redis (SYS-04-R18).
+        hub: WsHub | None = getattr(app.state, "ws_hub", None)
+        if hub is not None:
+            await hub.stop()
 
     await close_redis_client()
     await dispose_engine()
@@ -150,6 +156,10 @@ def create_app(modules: Sequence[ModuleDefinition] | None = None, role: AppRole 
     application.add_middleware(IdempotencyMiddleware)
 
     application.include_router(service_router)
+    # WebSocket `/ws`: каналы и команды модулей — через ModuleDefinition.ws_handlers (SYS-04-R1).
+    application.state.ws_hub = WsHub([handler for module in resolved_modules for handler in module.ws_handlers])
+    # Маршрут добавляется напрямую: include_router теряет путь WebSocket-маршрута в iter_route_contexts FastAPI.
+    application.router.routes.extend(create_ws_router(application.state.ws_hub).routes)
     for router in module_routers(resolved_modules):
         application.include_router(router)
 

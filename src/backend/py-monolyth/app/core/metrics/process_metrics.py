@@ -2,13 +2,14 @@
 
 - `flt_instance_info{instance_id, role, version, stand}` — info-метрика инстанса (SYS-12-R21);
 - `flt_redis_up` — 1, если последний `PING` Redis прошёл;
+- `flt_ws_connections` и `flt_ws_messages_total{direction}` — соединения и сообщения `/ws` (ADR-004);
 - `flt_db_pool_connections{state}` и `flt_redis_pool_connections{state}` — состояние пулов
   на момент сбора (`in_use`, `idle`), считаются коллектором без фоновых задач.
 """
 
 from collections.abc import Callable, Iterator
 
-from prometheus_client import REGISTRY, Gauge
+from prometheus_client import REGISTRY, Counter, Gauge
 from prometheus_client.core import GaugeMetricFamily
 from prometheus_client.registry import Collector
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -23,6 +24,8 @@ INSTANCE_INFO = Gauge(
     ["instance_id", "role", "version", "stand"],
 )
 REDIS_UP = Gauge("flt_redis_up", "Redis доступен по последней проверке (1/0)")
+WS_CONNECTIONS = Gauge("flt_ws_connections", "Открытые соединения /ws на инстансе")
+WS_MESSAGES = Counter("flt_ws_messages_total", "Сообщения /ws по направлению", ["direction"])
 
 
 def publish_instance_info(role: AppRole) -> None:

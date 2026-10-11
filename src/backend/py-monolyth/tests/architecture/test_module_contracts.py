@@ -235,4 +235,5 @@ def test_internal_routes_not_under_api_prefix() -> None:
 
     # - Assert -
     assert service_paths == {"/v1/health", "/v1/ready", "/v1/metrics"}
-    assert all(path.startswith(("/api/", "/v1/")) for path in paths), sorted(paths)
+    # Единственный WebSocket-маршрут фронтенда — `/ws` shared kernel (SYS-04-R1); `/ws/agent` — этап 4.
+    assert all(path.startswith(("/api/", "/v1/")) or path == "/ws" for path in paths), sorted(paths)
