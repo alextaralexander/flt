@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | draft |
-| Версия | 0.2 |
+| Статус | approved |
+| Версия | 1.0 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-11 (PR #3) |
 | Пункт(ы) BRD | все |
 | Модуль | все backend-модули, shared kernel (`app/core/ws`, `app/core/kafka`), frontend (`src/lib/ws`), `src/protocol` (локальный агент), `src/tools/contracts` |
 | Зависимости | ADR-002, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-010, ADR-012 |
@@ -772,3 +772,4 @@ class CompletionStreamHandler(WsChannelHandler):
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R21 — поле `visibility` (`internal` по умолчанию, `public` — для других модулей и плагинов, согласовано с SYS-09-R12) у `TopicDeclaration`, `topics.py` в `public/` по ADR-002 v1.1, исключение раздела 6 для R21 снято; пути тестов N3 — `tests/n_instances/core/`; уведомления — модуль `notifications`; раздел 9 — статусы OQ-17, OQ-49, OQ-70; пути тестов N3 R2, R24, R26 — `tests/n_instances/core/`; R21 — без упоминания `brokers/topics.py` | draft |
+| 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
