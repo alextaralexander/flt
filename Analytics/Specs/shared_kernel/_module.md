@@ -3,7 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Статус | approved |
-| Версия | 1.1 |
+| Версия | 1.2 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-11 (PR #4) |
@@ -42,7 +42,7 @@
 
 | Интерфейс | Метод | Назначение | Кто вызывает |
 |---|---|---|---|
-| `app.core.modules.ModuleDefinition` | поля `name`, `router`, `extra_prefixes`, `kafka_router`, `ws_handlers`, `metadata`, `settings`, `permissions`, `topics`, `schedules`, `extension_points`, `contributions`, `role_permissions_provider` | декларация модуля для реестра (ADR-002, SYS-09-R1) | все модули в `module.py` |
+| `app.core.modules.ModuleDefinition` | поля `name`, `router`, `extra_prefixes`, `kafka_router`, `ws_handlers`, `metadata`, `settings`, `permissions`, `topics`, `schedules`, `extension_points`, `contributions`, `role_permissions_provider`, `provides` (реализации `Protocol` модуля для контейнера, OQ-86) | декларация модуля для реестра (ADR-002, SYS-09-R1) | все модули в `module.py` |
 | `app.core.modules.load_modules` | `load_modules(names: Sequence[str]) -> ModuleRegistry` | подключение модулей из `app/modules/registry.py`, проверка префиксов, прав, топиков и точек расширения при старте | `create_app()`, роли `worker` и `migrate` |
 | `app.core.container.provide` | `provide(protocol: type[T]) -> Callable[..., T]`; `container.resolve(protocol: type[T]) -> T` | контейнер зависимостей для `Protocol` из `public/` модулей (ADR-004, раздел 2.6) | контроллеры (`Depends(provide(...))`), консьюмеры и планировщик (`container.resolve`) |
 | `app.core.ids.new_id` | `new_id() -> UUID` | UUID v7 для первичных ключей и `event_id` (ADR-003) | все модули |
@@ -58,9 +58,9 @@
 | `app.core.http.deps.Idempotent` | `Depends(Idempotent())` | идемпотентность `POST` по `Idempotency-Key` (SYS-03-R18) | контроллеры модулей |
 | `app.core.http.pagination` | `paginate_keyset(...)`, `paginate_offset(...)`, `parse_sort(...)` | курсорная и (только для администратора) смещённая пагинация, сортировка (SYS-03-R12, R13) | контроллеры модулей |
 | `app.core.http.context.RequestContext` | поля `request_id`, `instance_id`, `locale`, `user` | контекст запроса для логов и локализуемого содержимого (SYS-03-R20, R30) | контроллеры и сервисы модулей |
-| `app.core.security.auth_user` | `auth_user(permission: str) -> Depends[UserSecuritySchema]`; `auth_user_optional()`; `auth_websocket()`; маркер `public=True` | аутентификация cookie или Bearer, CSRF, проверка права по матрице SYS-06 (ADR-006, раздел 3.4; SYS-06-R5) | роутеры и обработчики WebSocket модулей |
+| `app.core.security.auth_user` | `auth_user(permission: str) -> Depends[UserSecuritySchema]` (грант права — `user.grant(permission)`); `auth_user_optional(permission)`; `auth_websocket()`; маркер публичного роута — `dependencies=[public()]`; пользователь сохраняется в `request.state` для `Idempotent()` и `RequestLanguage` (OQ-86) | аутентификация cookie или Bearer, CSRF, проверка права по матрице SYS-06 (ADR-006, раздел 3.4; SYS-06-R5) | роутеры и обработчики WebSocket модулей |
 | `app.core.security.TokenVerifier` | `async verify(token: str) -> UserSecuritySchema` | проверка access JWT EdDSA по `kid`, отзыв в Redis с fail-open (ADR-006, раздел 3.2) | `auth_user`, `auth_websocket` |
-| `app.core.security.RolePermissionsProvider` | `grants_for(roles: Sequence[str], flags: UserFlags) -> frozenset[Grant]` | интерфейс, объявленный в ядре; реализацию регистрирует `identity` (ADR-006, раздел 3.8; SYS-06-R4) | `auth_user` |
+| `app.core.security.RolePermissionsProvider` | `async grants_for(roles: Sequence[str], flags: UserFlags) -> frozenset[Grant]`; `async denial_code(permission, roles, flags) -> str \| None` — код отказа SYS-06-R7 (OQ-86) | интерфейс, объявленный в ядре; реализацию регистрирует `identity` (ADR-006, раздел 3.8; SYS-06-R4) | `auth_user` |
 | `app.core.kafka.OutboxPublisher` | `await publish(session, event: BaseEvent)`; `await send_command(session, command: JobCommand)` | запись события или команды в `<module>.outbox` в транзакции с данными (ADR-004, SYS-04-R24) | сервисы модулей |
 | `app.core.kafka.idempotent_consumer` | декоратор `@idempotent_consumer(module, handler)` | inbox `<module>.processed_events`, ретраи 1 с, 5 с, 25 с, затем `<topic>.dlq` (SYS-04-R26, R27) | консьюмеры модулей |
 | `app.core.kafka.TopicDeclaration` | `TopicDeclaration(name, kind, visibility, partitions, retention, message_model, description)` | декларация топика в `public/topics.py` модуля (SYS-04-R21, SYS-09-R12) | все модули с Kafka |
@@ -223,8 +223,8 @@
 | `AUTH_CSRF_SECRET` | SecretStr | — | да | HMAC CSRF-токена |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_FROM` | str, int | Mailpit на local, dev, test | нет | SMTP-клиент (OQ-11) |
 | `SMTP_PASSWORD` | SecretStr | — | да | пароль SMTP |
-| `CAPTCHA_ENABLED`, `CAPTCHA_SITE_KEY` | bool, str | `false` | нет | капча (OQ-10) |
-| `CAPTCHA_SERVER_KEY` | SecretStr | — | да (при `CAPTCHA_ENABLED=true`) | серверный ключ Yandex SmartCaptcha |
+| `CAPTCHA_ENABLED`, `CAPTCHA_PROVIDER`, `CAPTCHA_SITE_KEY` | bool, str (`stub` или `smartcaptcha`), str | `false`, `smartcaptcha`, — | нет | капча (OQ-10, OQ-86); при сбое SmartCaptcha — отказ (fail-closed) |
+| `SMARTCAPTCHA_SERVER_KEY` | SecretStr | — | да (при `CAPTCHA_ENABLED=true` и `CAPTCHA_PROVIDER=smartcaptcha`) | серверный ключ Yandex SmartCaptcha (имя по ADR-013) |
 | `OTLP_EXPORTER_ENDPOINT` | str | пусто | нет | экспорт трейсов выключен до этапа 4 (ADR-010) |
 | `LOGS_RETENTION_DAYS` | int | `14` | нет | срок хранения логов (используется развёртыванием) |
 
@@ -315,6 +315,7 @@
 
 | Вопрос | Суть | Блокирует G1 | Статус |
 |---|---|---|---|
+| [OQ-86](../../open-questions.md) | уточнения ядра по реализации Г.4, часть 1 (12 решений) | нет | resolved: утверждены пользователем 2026-10-11 |
 | [OQ-84](../../open-questions.md) | перечень подпакетов `app/core` в SYS-01-R10 | нет | resolved: добавлены `i18n`, `resilience`, `extensions` (SYS-01 2.0) |
 | [OQ-77](../../open-questions.md) | анонимная сессия `flt_anon_session` — субъект `Idempotent()` и лимитов анонима | нет | open: рабочее решение утверждено |
 | [OQ-20](../../open-questions.md) | экспорт трейсов | нет | resolved: выключен до этапа 4 |
@@ -329,3 +330,4 @@
 | 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока В (PR #4) | approved |
 | 1.1 | 2026-10-11 | Claude | Раздел 8: удалена `MIGRATE_ON_START` (SYS-05-R33, реализация Г.1); на утверждение в PR Г.1 | review |
 | 1.1 | 2026-10-11 | пользователь | Утверждена (PR #5) | approved |
+| 1.2 | 2026-10-11 | пользователь | Уточнения по реализации Г.4, часть 1 (PR #6, OQ-86): `auth_user` и `public()`, асинхронный `RolePermissionsProvider` с `denial_code`, поле `provides`, переменные капчи | approved |
