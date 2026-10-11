@@ -152,7 +152,7 @@
 - Библиотеки: `i18next`, `react-i18next`, `i18next-browser-languagedetector`, `i18next-resources-to-backend`; инициализация — `src/lib/i18n/i18n.ts`; языки `ru`, `en`, `ar`; `supportedLngs: ['ru', 'en', 'ar']`, `nonExplicitSupportedLngs: true` (`ru-RU` → `ru`), `load: 'languageOnly'`.
 - Определение языка: `i18next-browser-languagedetector` с порядком источников и ключом хранения, которые задаёт SYS-07 (OQ-25: профиль → явный выбор в `localStorage` ключ `flt.ui_language` → `navigator.languages` → язык по умолчанию). Язык из профиля (STU-06, этап 4) применяется вызовом `i18n.changeLanguage` после загрузки `me`. Хранение выбора в `localStorage` — состояние браузера, а не инстанса (допустимо по CLAUDE.md «Масштабирование и состояние»).
 - Структура ресурсов — namespace на модуль, файлы рядом с модулем:
-  ```
+  ```text
   src/lib/i18n/
     i18n.ts                      # init, детектор, resources-to-backend
     direction.ts                 # getDirection(lng): 'ltr' | 'rtl'; applyDocumentDirection(lng)
@@ -175,7 +175,7 @@
 - Radix: `<DirectionProvider dir={direction}>` оборачивает приложение в `src/app/provider.tsx`; `direction` берётся из хука `useDirection()` (`src/lib/i18n/use-direction.ts`), подписанного на `languageChanged`.
 - Tailwind: только логические утилиты — `ms-*`, `me-*`, `ps-*`, `pe-*`, `start-*`, `end-*`, `inset-s-*`, `inset-e-*`, `text-start`, `text-end`, `rounded-s-*`, `rounded-e-*`, `rounded-ss-*`, `rounded-se-*`, `rounded-es-*`, `rounded-ee-*`, `border-s-*`, `border-e-*`, `scroll-ms-*`, `scroll-me-*`, `scroll-ps-*`, `scroll-pe-*`, `float-start`, `float-end`, `clear-start`, `clear-end`. Варианты `rtl:` и `ltr:` разрешены только для зеркалирования иконок и фоновых изображений (`rtl:-scale-x-100` для `ChevronRight`, `ArrowRight` из lucide).
 - Запрет физических классов — локальное правило ESLint `flt/no-physical-direction-classes` (файл `eslint-rules/no-physical-direction-classes.js`, подключается в `eslint.config.js` как плагин `flt`). Правило проверяет строковые литералы и шаблонные строки в атрибуте `className` и в аргументах вызовов `cn(...)`, `cva(...)`, `twMerge(...)` регулярным выражением:
-  ```
+  ```text
   (^|[\s:'"`])(-?)(ml|mr|pl|pr|left|right|inset-x|scroll-ml|scroll-mr|scroll-pl|scroll-pr|rounded-l|rounded-r|rounded-tl|rounded-tr|rounded-bl|rounded-br|border-l|border-r)-|(^|[\s:'"`])(text-left|text-right|float-left|float-right|clear-left|clear-right)(\s|$|['"`])
   ```
   Исключение — класс с явным вариантом `ltr:` или `rtl:` (разрешено только внутри `src/components/ui`). Для `.css`-файлов — архитектурный тест `src/testing/architecture/no-physical-direction.test.ts` с тем же выражением плюс свойства `margin-left`, `margin-right`, `padding-left`, `padding-right`, `left:`, `right:`, `text-align: left`, `text-align: right`, `border-left`, `border-right` (разрешены логические `margin-inline-start`, `padding-inline-end`, `inset-inline-start`, `text-align: start`).
@@ -214,7 +214,7 @@
   Сгенерированный код коммитится (`src/features/<module>/api/generated/**`), исключается из ESLint, Prettier и покрытия; скрипт `api:generate` = `orval`, `api:check` = `orval && git diff --exit-code -- 'src/**/generated/**'` выполняется в CI, чтобы код не расходился с контрактом. Шаблон ТЗ (раздел «Контракты») ссылается на эту команду. Ручные обёртки над сгенерированными хуками (ключи запросов, инвалидация) лежат в `src/features/<module>/api/*.ts`, как в `docs/api-layer.md`.
 - Моки: сгенерированные MSW-обработчики (`*.msw.ts`, faker с фиксированным `seed`) подключаются в `src/testing/mocks/handlers/<module>.ts`, где при необходимости дополняются состоянием на `@mswjs/data`; `mock-server.ts` (Express + `@mswjs/http-middleware`) остаётся для E2E на mock-сервере.
 - WebSocket-клиент — shared-слой `src/lib/ws/`:
-  ```
+  ```text
   src/lib/ws/ws-client.ts        # класс WsClient: connect(), close(), send(msg), subscribe(type, schema, handler) → unsubscribe
   src/lib/ws/use-ws-subscription.ts  # хук useWsSubscription(type, schema, handler) с автоотпиской
   src/lib/ws/envelope.ts         # zod-схема конверта из ADR-004 (type, correlation_id, channel, seq, ts, payload); бинарные кадры — заголовок 9 байт (тип, stream_id, seq)
@@ -303,7 +303,7 @@ export default [
   }
   ```
   `Content-Security-Policy` задаёт Nginx в этом же файле (ADR-012 закрепляет CSP за ADR-005, так как политика зависит от сборки frontend); HSTS, `X-Frame-Options`, `Permissions-Policy` ставит HAProxy (ADR-012). Стартовая политика для HTML-ответов (`location = /index.html`):
-  ```
+  ```text
   Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
   ```
   Обоснование: сборка Vite не содержит inline-скриптов (`<script type="module" src>`), поэтому `script-src` без хэшей; `'wasm-unsafe-eval'` нужен для VAD в WASM на этапе 5 (ADR-009); `'unsafe-inline'` в `style-src` — для inline-атрибутов `style` компонентов Radix (нонсы к атрибутам неприменимы); `connect-src 'self'` покрывает `/api` и `/ws` того же origin; `media-src blob:` — воспроизведение аудио TTS; файлы хранилища отдаются с того же origin по путям `/flt-*` (ADR-007, ADR-012), поэтому покрываются `'self'` и отдельных источников не требуют. Любое расширение политики фиксируется в ТЗ, которое его требует. Один и тот же файл используется в docker-compose (копируется в образ) и в Helm (тот же образ; переопределение через ConfigMap — SYS-11). Healthcheck контейнера — `GET /healthz`.
@@ -311,6 +311,7 @@ export default [
 ### 3.9. Переменные окружения
 
 `src/frontend/.env.example`:
+
 ```ini
 # Относительные адреса: один и тот же build на всех стендах, маршрутизация через HAProxy (ADR-012)
 VITE_APP_API_URL=/api/v1
@@ -320,6 +321,7 @@ VITE_APP_ENABLE_API_MOCKING=false
 # Адрес бэкенда для dev-прокси Vite (не попадает в сборку)
 VITE_DEV_BACKEND_URL=http://localhost:8000
 ```
+
 `.env.example-e2e` — то же с `VITE_APP_ENABLE_API_MOCKING=true` и `VITE_APP_APP_URL=http://localhost:3000`. Переменные `APP_URL`, `APP_MOCK_API_PORT` из `src/config/env.ts` сохраняются для mock-сервера.
 
 ## 4. Последствия

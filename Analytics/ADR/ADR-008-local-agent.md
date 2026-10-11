@@ -162,7 +162,7 @@
 
 ### 3.1. Состав и структура агента
 
-```
+```text
 src/agent/
   pyproject.toml                 # name = "flt-agent", requires-python = ">=3.14" (ADR-001), uv; зависимость flt-protocol по пути ../protocol
   flt_agent/
