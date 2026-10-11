@@ -22,7 +22,7 @@ import { Link } from '../ui/link';
 type SideNavigationItem = {
   name: string;
   to: string;
-  icon: (props: React.SVGProps<SVGSVGElement>) => JSX.Element;
+  icon: (props: React.SVGProps<SVGSVGElement>) => React.JSX.Element;
 };
 
 const Logo = () => {

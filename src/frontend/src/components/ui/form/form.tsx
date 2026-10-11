@@ -6,6 +6,7 @@ import type {
   ControllerProps,
   FieldPath,
   FieldValues,
+  Resolver,
   SubmitHandler,
   UseFormProps,
   UseFormReturn,
@@ -192,7 +193,10 @@ const Form = <
   id,
   schema,
 }: FormProps<TFormValues, Schema>) => {
-  const form = useForm({ ...options, resolver: zodResolver(schema) });
+  const form = useForm<TFormValues>({
+    ...options,
+    resolver: zodResolver(schema) as unknown as Resolver<TFormValues>,
+  });
   return (
     <FormProvider {...form}>
       <form
