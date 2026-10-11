@@ -27,6 +27,7 @@ from app.core.extensions.registry import (
     build_extension_registries,
     register_extension_registries,
 )
+from app.core.kafka.declarations import ScheduleDeclaration, TopicDeclaration
 from app.core.mail import MailClient, SmtpMailClient
 from app.core.security.permissions import RolePermissionsProvider, validate_permission_code
 from app.core.security.tokens import TokenVerifier
@@ -52,6 +53,9 @@ class ModuleDefinition:
             (ADR-006, раздел 3.8).
         provides: Реализации `Protocol` из `public/` модуля, которые `install_modules` регистрирует
             в контейнере (ADR-004, раздел 2.6; OQ-86).
+        topics: Декларации топиков модуля из `public/topics.py` (SYS-04-R21); по ним роль `migrate`
+            создаёт топики и DLQ.
+        schedules: Периодические задачи модуля из `schedules.py` (SYS-04-R32).
     """
 
     name: str
@@ -66,6 +70,8 @@ class ModuleDefinition:
     contributions: tuple[ExtensionContribution, ...] = ()
     role_permissions_provider: RolePermissionsProvider | None = None
     provides: tuple[ServiceBinding, ...] = ()
+    topics: tuple[TopicDeclaration, ...] = ()
+    schedules: tuple[ScheduleDeclaration, ...] = ()
 
 
 class ModuleLoadError(RuntimeError):
@@ -118,6 +124,29 @@ def _check_provides(module: ModuleDefinition) -> None:
             )
 
 
+def _check_schedules(module: ModuleDefinition) -> None:
+    """Имена периодических задач модуля уникальны (имя входит в ключ блокировки, SYS-04-R32)."""
+    seen: set[str] = set()
+    for schedule in module.schedules:
+        if schedule.name in seen:
+            raise ModuleLoadError(f"Модуль {module.name}: задача {schedule.name!r} объявлена дважды (SYS-04-R32).")
+        seen.add(schedule.name)
+
+
+def _check_topics(definitions: Sequence[ModuleDefinition]) -> None:
+    """Модуль объявляет только свои топики; имя топика уникально в монолите (SYS-04-R19, R21)."""
+    owners: dict[str, str] = {}
+    for module in definitions:
+        for topic in module.topics:
+            if topic.module != module.name:
+                raise ModuleLoadError(
+                    f"Модуль {module.name}: топик {topic.name} принадлежит модулю {topic.module} (SYS-04-R19)."
+                )
+            if topic.name in owners:
+                raise ModuleLoadError(f"Топик {topic.name} объявлен дважды (SYS-04-R19).")
+            owners[topic.name] = module.name
+
+
 class ModuleRegistry(Sequence[ModuleDefinition]):
     """Модули реестра в порядке зависимостей и собранные из них объекты старта.
 
@@ -153,6 +182,7 @@ class ModuleRegistry(Sequence[ModuleDefinition]):
             _check_router_prefix(module)
             _check_extension_points(module)
             _check_provides(module)
+            _check_schedules(module)
             provider = module.role_permissions_provider
             if provider is not None:
                 if not isinstance(provider, RolePermissionsProvider):
@@ -160,6 +190,7 @@ class ModuleRegistry(Sequence[ModuleDefinition]):
                         f"Модуль {module.name}: провайдер ролей не реализует RolePermissionsProvider."
                     )
                 providers.append((module.name, provider))
+        _check_topics(definitions)
         bindings: dict[type[Any], str] = {}
         for module in definitions:
             for binding in module.provides:

@@ -4,6 +4,7 @@ ADR-002, раздел 3.2; ADR-006, раздел 3.8; SYS-06-R2, R4; SYS-09-R1�
 """
 
 from collections.abc import Iterator, Sequence
+from datetime import timedelta
 from typing import Protocol, runtime_checkable
 
 import pytest
@@ -13,6 +14,7 @@ from sqlalchemy import MetaData
 from app.core.captcha import CaptchaProvider, StubCaptchaProvider
 from app.core.container import ServiceBinding, container
 from app.core.extensions import ExtensionContribution, ExtensionPoint, ExtensionRegistrationError, ExtensionRegistry
+from app.core.kafka.declarations import ScheduleDeclaration, TopicDeclaration
 from app.core.mail import MailClient, SmtpMailClient
 from app.core.modules import ModuleDefinition, ModuleLoadError, ModuleRegistry, install_modules, load_modules
 from app.core.security import Grant, RolePermissionsProvider, Scope, TokenVerifier, UserFlags
@@ -245,3 +247,38 @@ class TestProvides:
         """Фабрика должна быть вызываемой."""
         with pytest.raises(ModuleLoadError, match="фабрика"):
             ModuleRegistry.build([_module("alpha", provides=(ServiceBinding(GreeterService, object()),))])  # type: ignore[arg-type]
+
+
+async def _noop_task() -> None:
+    """Пустая периодическая задача."""
+
+
+@pytest.mark.req("SYS-04-R19")
+class TestTopicsAndSchedules:
+    """`ModuleDefinition.topics` и `schedules`: модуль объявляет только свои топики, имена уникальны."""
+
+    def test_own_topics_and_schedules_are_accepted(self) -> None:
+        """Декларации модуля доступны в реестре."""
+        topic = TopicDeclaration(name="flt.alpha.thing_created.v1")
+        schedule = ScheduleDeclaration(name="purge", cron="0 3 * * *", handler=_noop_task, lock_ttl=timedelta(hours=1))
+        registry = ModuleRegistry.build([_module("alpha", topics=(topic,), schedules=(schedule,))])
+        assert registry[0].topics == (topic,)
+        assert registry[0].schedules == (schedule,)
+
+    def test_foreign_topic_stops_start(self) -> None:
+        """Топик чужого модуля в декларациях — ошибка старта."""
+        with pytest.raises(ModuleLoadError, match=r"flt\.beta\.thing_created\.v1"):
+            ModuleRegistry.build([_module("alpha", topics=(TopicDeclaration(name="flt.beta.thing_created.v1"),))])
+
+    def test_duplicate_topic_stops_start(self) -> None:
+        """Топик объявлен дважды — ошибка старта."""
+        topic = TopicDeclaration(name="flt.alpha.thing_created.v1")
+        with pytest.raises(ModuleLoadError, match="дважды"):
+            ModuleRegistry.build([_module("alpha", topics=(topic, topic))])
+
+    @pytest.mark.req("SYS-04-R32")
+    def test_duplicate_schedule_stops_start(self) -> None:
+        """Задача с тем же именем объявлена дважды — ошибка старта."""
+        schedule = ScheduleDeclaration(name="purge", cron="0 3 * * *", handler=_noop_task, lock_ttl=timedelta(hours=1))
+        with pytest.raises(ModuleLoadError, match="purge"):
+            ModuleRegistry.build([_module("alpha", schedules=(schedule, schedule))])
