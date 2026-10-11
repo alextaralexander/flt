@@ -225,7 +225,7 @@
 
 ### SYS-12-R23 Секреты в CI
 
-- **Формулировка**: В репозитории не должно быть секретов; GitHub Secrets используются только в окружении `prod` (`VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`) и, при приватном репозитории, `GHCR_PULL_TOKEN` для VPS; тесты и стенды CI получают секреты от `deploy/scripts/gen-secrets.sh --ci` в шаге job-а и от фикстур (одноразовая Ed25519-пара — ADR-006), пароль PostgreSQL CI — несекретная константа `flt_ci` в `docker-compose.ci.yml` с комментарием `# pragma: allowlist secret`; `detect-secrets` с `.secrets.baseline` в корне проверяет весь репозиторий, включая `tests/cassettes/**` и `Analytics/**`; job-ы не печатают переменные окружения стендов, значения из `gen-secrets.sh` маскируются (`::add-mask::`); job-ы `pull_request` из форков не получают секретов и не выполняются на self-hosted runner-е.
+- **Формулировка**: В репозитории не должно быть секретов; GitHub Secrets используются только в окружении `prod` (`VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`) и, при приватном репозитории, `GHCR_PULL_TOKEN` для VPS; тесты и стенды CI получают секреты от `deploy/scripts/gen-secrets.sh --ci` в шаге job-а и от фикстур (одноразовая Ed25519-пара — ADR-006), пароль PostgreSQL CI — несекретная константа `flt_ci` в `docker-compose.ci.yml` с комментарием `# pragma: allowlist secret`; `detect-secrets` с `.secrets.baseline` в корне проверяет весь репозиторий, включая `tests/fixtures/llm_cassettes/**`, `tests/fixtures/speech_cassettes/**` и `Analytics/**`; job-ы не печатают переменные окружения стендов, значения из `gen-secrets.sh` маскируются (`::add-mask::`); job-ы `pull_request` из форков не получают секретов и не выполняются на self-hosted runner-е.
 - **Обоснование**: ADR-011, раздел 3.6; ADR-013, раздел 3.5 (CI); CLAUDE.md «Правила для Claude»: не коммитить секреты.
 - **Проверка**: job `backend-quality` (`detect-secrets-hook`); `test_workflows.py::test_secrets_only_in_prod_environment` (в `ci.yml` нет `secrets.` кроме `GITHUB_TOKEN`; в `deploy-vps.yml` — только в job с `environment: prod`); ревью `.secrets.baseline` при каждом его изменении.
 - **Применимость**: CI.
@@ -743,7 +743,7 @@ echo "SMOKE OK"
 | [OQ-05](../../open-questions.md) | Ветвление и коммиты | нет | resolved: R17–R20 детализируют (commitlint добавлен как механизм проверки) |
 | [OQ-06](../../open-questions.md) | Платформа CI | нет | resolved: GitHub Actions |
 | [OQ-07](../../open-questions.md) | Prod на VPS, Helm в kind | нет | resolved: R28–R30 (деплой на VPS), job `helm` |
-| [OQ-70](../../open-questions.md) | Расположение репозиторных скриптов | нет | в реестре `open`, но ADR-011 (accepted, раздел 3) фиксирует решение пользователя 2026-10-10: `src/tools/` — Python-пакет `flt_tools`, `deploy/scripts/` — скрипты развёртывания; спецификация следует ADR-011; карточку OQ-70 нужно перевести в `resolved` (отчёт оркестратору) |
+| [OQ-70](../../open-questions.md) | Расположение репозиторных скриптов | нет | resolved: `src/tools/` — Python-пакет `flt_tools`, `deploy/scripts/` — скрипты развёртывания (ADR-011) |
 | [OQ-68](../../open-questions.md) | Self-hosted runner | нет | deferred: механизм переключения — R27 |
 | [OQ-39](../../open-questions.md) | Видимость и лицензия репозитория | нет | open: влияет на бюджет минут (R27) и `GHCR_PULL_TOKEN` (R23), требования от решения не зависят |
 | [OQ-64](../../open-questions.md) | Образ MinIO | нет | open: исключение из Renovate (раздел 6) |
@@ -753,4 +753,4 @@ echo "SMOKE OK"
 | Версия | Дата | Автор | Что изменилось | Статус |
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
-| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R5 — перевод PR в ready на шаге 9 (ADR-011 v1.1, CLAUDE.md), а не на шаге 11, чек-боксы шаблона PR и раздела 4; R2, R4 и пример `ci-ok` — job `dependency-audit` в быстрой ступени и в обязательных проверках; новые R35 (`dependency-audit`: pip-audit, pnpm audit, лицензии), R36 (Trivy в `images` и `release.yml`), R37 (axe WCAG 2.2 AA и Lighthouse CI в `e2e`), R38 (`flt-tools permissions check`, `modules check`, `deploy parity`), R39 (oasdiff в `contracts`) | draft |
+| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R5 — перевод PR в ready на шаге 9 (ADR-011 v1.1, CLAUDE.md), а не на шаге 11, чек-боксы шаблона PR и раздела 4; R2, R4 и пример `ci-ok` — job `dependency-audit` в быстрой ступени и в обязательных проверках; новые R35 (`dependency-audit`: pip-audit, pnpm audit, лицензии), R36 (Trivy в `images` и `release.yml`), R37 (axe WCAG 2.2 AA и Lighthouse CI в `e2e`), R38 (`flt-tools permissions check`, `modules check`, `deploy parity`), R39 (oasdiff в `contracts`); R23 — пути кассет по SYS-10; раздел 9 — OQ-70 resolved | draft |
