@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | draft |
-| Версия | 0.2 |
+| Статус | approved |
+| Версия | 1.0 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-11 (PR #3) |
 | Пункт(ы) BRD | все |
 | Модуль | все (shared kernel — реализация; каждый доменный модуль — соблюдение) |
 | Зависимости | ADR-003, ADR-004 (accepted); SYS-01 (карта модулей — для контрактов import-linter), SYS-04 (протокол WebSocket и Kafka — для требований R24–R31) |
@@ -851,3 +851,4 @@ async def test_scenario_survives_instance_stop(stand: Stand, on_instance: OnInst
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: пути REST в примерах — сегмент `learning-plan` (SYS-03-R1); проверки кода ошибки в примерах — по конверту SYS-03-R7 (`messages.ERROR[0].code`, `assessment.quick_test_unavailable`); раздел 7 — коды `core.version_conflict` и `<module>.<state_error>`; ключ состояния быстрого теста — по анонимной сессии `flt_anon_session` (OQ-77); раздел 9 — OQ-77; таблица TTL Redis — ключ `Idempotency-Key` (SYS-03-R18) | draft |
+| 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
