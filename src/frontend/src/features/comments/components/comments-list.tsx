@@ -1,8 +1,8 @@
 import { ArchiveX } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { MDPreview } from '@/components/ui/md-preview';
-import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button/button';
+import { MDPreview } from '@/components/ui/md-preview/md-preview';
+import { Spinner } from '@/components/ui/spinner/spinner';
 import { useUser } from '@/lib/auth';
 import { POLICIES, Authorization } from '@/lib/authorization';
 import type { User } from '@/types/api';

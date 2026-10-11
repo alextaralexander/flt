@@ -3,21 +3,24 @@ import { useEffect, useState } from 'react';
 import { NavLink, useNavigate, useNavigation } from 'react-router';
 
 import logo from '@/assets/logo.svg';
-import { Button } from '@/components/ui/button';
-import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
-import { paths } from '@/config/paths';
-import { useLogout } from '@/lib/auth';
-import { ROLES, useAuthorization } from '@/lib/authorization';
-import { cn } from '@/utils/cn';
-
+import { Button } from '@/components/ui/button/button';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTrigger,
+} from '@/components/ui/drawer/drawer';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '../ui/dropdown';
-import { Link } from '../ui/link';
+} from '@/components/ui/dropdown/dropdown';
+import { Link } from '@/components/ui/link/link';
+import { paths } from '@/config/paths';
+import { useLogout } from '@/lib/auth';
+import { ROLES, useAuthorization } from '@/lib/authorization';
+import { cn } from '@/utils/cn';
 
 type SideNavigationItem = {
   name: string;
@@ -36,14 +39,16 @@ const Logo = () => {
   );
 };
 
+// Прогресс сбрасывается пересозданием компонента при смене целевого пути
+const NavigationProgress = () => {
+  const { location } = useNavigation();
+  return <Progress key={location?.pathname} />;
+};
+
 const Progress = () => {
-  const { state, location } = useNavigation();
+  const { state } = useNavigation();
 
   const [progress, setProgress] = useState(0);
-
-  useEffect(() => {
-    setProgress(0);
-  }, [location?.pathname]);
 
   useEffect(() => {
     if (state === 'loading') {
@@ -126,7 +131,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       </aside>
       <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-60">
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:justify-end sm:border-0 sm:bg-transparent sm:px-6">
-          <Progress />
+          <NavigationProgress />
           <Drawer>
             <DrawerTrigger asChild>
               <Button size="icon" variant="outline" className="sm:hidden">

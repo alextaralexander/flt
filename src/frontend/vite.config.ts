@@ -3,12 +3,12 @@
 
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
-import viteTsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   // SPA с history-роутером: ассеты всегда от корня (ADR-005, 3.1)
   base: '/',
-  plugins: [react(), viteTsconfigPaths()],
+  plugins: [react()],
+  resolve: { tsconfigPaths: true },
   server: {
     port: 3000,
   },
@@ -38,6 +38,7 @@ export default defineConfig({
         '**/*.stories.tsx',
         '**/*.test.{ts,tsx}',
         'src/testing/**',
+        '**/__fixtures__/**',
         'src/types/**',
         'src/app/**',
         '**/locales/**',

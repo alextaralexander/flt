@@ -4,8 +4,8 @@ import * as React from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 
 import { MainErrorFallback } from '@/components/errors/main';
-import { Notifications } from '@/components/ui/notifications';
-import { Spinner } from '@/components/ui/spinner';
+import { Notifications } from '@/components/ui/notifications/notifications';
+import { Spinner } from '@/components/ui/spinner/spinner';
 import { AuthLoader } from '@/lib/auth';
 import { queryConfig } from '@/lib/react-query';
 

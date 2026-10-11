@@ -4,6 +4,7 @@ import {
   createDiscussion,
   createComment,
 } from '../../src/testing/data-generators';
+
 test('smoke', async ({ page }) => {
   const discussion = createDiscussion();
   const comment = createComment();

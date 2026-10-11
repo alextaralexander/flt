@@ -1,10 +1,10 @@
-import * as React from 'react';
+import type * as React from 'react';
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
 import logo from '@/assets/logo.svg';
-import { Head } from '@/components/seo';
-import { Link } from '@/components/ui/link';
+import { Head } from '@/components/seo/head';
+import { Link } from '@/components/ui/link/link';
 import { paths } from '@/config/paths';
 import { useUser } from '@/lib/auth';
 

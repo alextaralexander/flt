@@ -3,8 +3,8 @@ import { ErrorBoundary } from 'react-error-boundary';
 import type { LoaderFunctionArgs } from 'react-router';
 import { useParams } from 'react-router';
 
-import { ContentLayout } from '@/components/layouts';
-import { Spinner } from '@/components/ui/spinner';
+import { ContentLayout } from '@/components/layouts/content-layout';
+import { Spinner } from '@/components/ui/spinner/spinner';
 import { getInfiniteCommentsQueryOptions } from '@/features/comments/api/get-comments';
 import { Comments } from '@/features/comments/components/comments';
 import {

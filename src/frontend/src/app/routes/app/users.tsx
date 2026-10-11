@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import { ContentLayout } from '@/components/layouts';
+import { ContentLayout } from '@/components/layouts/content-layout';
 import { getUsersQueryOptions } from '@/features/users/api/get-users';
 import { UsersList } from '@/features/users/components/users-list';
 import { Authorization, ROLES } from '@/lib/authorization';

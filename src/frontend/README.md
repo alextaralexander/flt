@@ -19,12 +19,12 @@ pnpm install
 
 ## Команды
 
-| Команда | Что делает |
-|---|---|
-| `pnpm dev` | dev-сервер на порту 3000 |
-| `pnpm build` | production-сборка в `dist/` |
-| `pnpm lint` | ESLint |
-| `pnpm check-types` | проверка типов |
-| `pnpm test` | Vitest |
-| `pnpm test-e2e` | Playwright на mock-сервере |
-| `pnpm storybook` | Storybook на порту 6006 |
+| Команда            | Что делает                  |
+| ------------------ | --------------------------- |
+| `pnpm dev`         | dev-сервер на порту 3000    |
+| `pnpm build`       | production-сборка в `dist/` |
+| `pnpm lint`        | ESLint                      |
+| `pnpm check-types` | проверка типов              |
+| `pnpm test`        | Vitest                      |
+| `pnpm test-e2e`    | Playwright на mock-сервере  |
+| `pnpm storybook`   | Storybook на порту 6006     |

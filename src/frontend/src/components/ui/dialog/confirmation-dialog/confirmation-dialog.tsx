@@ -2,7 +2,7 @@ import { CircleAlert, Info } from 'lucide-react';
 import * as React from 'react';
 import { useEffect } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/button/button';
 import { useDisclosure } from '@/hooks/use-disclosure';
 
 import {

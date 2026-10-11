@@ -37,6 +37,9 @@ setup('authenticate', async ({ page }) => {
   await page.getByLabel('Password').fill(user.password);
   await page.getByRole('button', { name: 'Log in' }).click();
   await page.waitForURL('/app');
+  await expect(
+    page.getByRole('button', { name: 'Open user menu' }),
+  ).toBeVisible();
 
   await page.context().storageState({ path: authFile });
 });

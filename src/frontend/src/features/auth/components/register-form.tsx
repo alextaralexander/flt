@@ -1,8 +1,11 @@
-import * as React from 'react';
 import { Link, useSearchParams } from 'react-router';
 
-import { Button } from '@/components/ui/button';
-import { Form, Input, Select, Label, Switch } from '@/components/ui/form';
+import { Button } from '@/components/ui/button/button';
+import { Form } from '@/components/ui/form/form';
+import { Input } from '@/components/ui/form/input';
+import { Label } from '@/components/ui/form/label';
+import { Select } from '@/components/ui/form/select';
+import { Switch } from '@/components/ui/form/switch';
 import { paths } from '@/config/paths';
 import { useRegister, registerInputSchema } from '@/lib/auth';
 import type { Team } from '@/types/api';
