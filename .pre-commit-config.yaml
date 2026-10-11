@@ -112,7 +112,7 @@ repos:
       # CI: frontend (`pnpm lint`, `pnpm format:check`).
       - id: frontend-lint-staged
         name: lint-staged (frontend)
-        entry: pnpm --dir=src/frontend exec lint-staged
+        entry: bash -c 'cd src/frontend && pnpm exec lint-staged'
         language: system
         pass_filenames: false
         files: ^src/frontend/
