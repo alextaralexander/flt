@@ -3,12 +3,12 @@
 | Поле | Значение |
 |---|---|
 | Статус | draft |
-| Версия | 0.1 |
-| Дата | 2026-10-10 |
+| Версия | 0.2 |
+| Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | |
 | Пункт(ы) BRD | все (строки UI любого пункта); напрямую — STU-06 (язык интерфейса), STU-07 и STU-33 (изучаемые языки), STU-08–STU-11 (европейские языки, RTL, вязь, иероглифы), VIS-01–VIS-05 (портал и письма на трёх языках), TCH-07 (часовые пояса расписания) |
-| Модуль | все; владельцы данных — `identity` (`ui_language`), `learner_profile` (изучаемые языки, часовой пояс), `languages` (реестр языков); frontend — app_shell (`src/lib/i18n`) и все `src/features/<модуль>` |
+| Модуль | все; владельцы данных — `identity` (`ui_language`, `timezone` в `identity.users`), `learner_profile` (изучаемые языки), `languages` (реестр языков); frontend — app_shell (`src/lib/i18n`) и все `src/features/<модуль>` |
 | Зависимости | ADR-005 (механизм i18next, RTL, ESLint-правила), ADR-006 (колонка `users.ui_language`), ADR-002 (раскладка модулей backend) |
 | Связанные ADR/SYS | ADR-004 (ключи i18n в сообщениях WebSocket), ADR-009 (`message` как ключ i18n в ошибках стрима), ADR-012 (CSP `font-src 'self'` у Nginx — ADR-005), ADR-014 (поля `text_<lang>` по кодам реестра языков), SYS-01 (владельцы `ui_language`, уведомлений), SYS-02 (152-ФЗ: шрифты и ресурсы без внешних хостов), SYS-03 (коды ошибок, `Accept-Language`, формат дат в REST), SYS-08 (язык промптов), SYS-09 (реестр языков как точка расширения), SYS-10 (E2E на трёх языках) |
 
@@ -98,7 +98,7 @@
 ### SYS-07-R9 Строки UI только через `t()`
 
 - **Формулировка**: в JSX модулей и shared-компонентов не должно быть строковых литералов, видимых пользователю: правило `react/jsx-no-literals` в режиме `noStrings: true, ignoreProps: false` для `src/features/**`, `src/components/**`, `src/app/**` с перечнем `allowedStrings`, в который входят только пробел, знаки пунктуации `.`, `,`, `:`, `;`, `—`, `–`, `/`, `|`, `(`, `)`, `%`, `+`, `×` и цифры; `aria-label`, `title`, `placeholder`, `alt` — тоже через `t()`.
-- **Обоснование**: CLAUDE.md «Определение готовности»: «Строки UI вынесены в i18n»; ADR-005, 3.3 и 3.6 вводят правило; перечень `allowedStrings` фиксируется здесь, чтобы его не расширяли под конкретный экран.
+- **Обоснование**: CLAUDE.md «Определение готовности»: «Строки UI вынесены в i18n»; ADR-005, 3.3 и 3.6 вводят правило; перечень `allowedStrings` фиксируется здесь, чтобы его не расширяли под конкретный экран; окончательный перечень утверждается вместе с перечнем зеркалируемых иконок (OQ-82).
 - **Проверка**: ESLint в `pnpm lint` (job `frontend`, ADR-011); перечень `allowedStrings` сверяется тестом `src/testing/architecture/eslint-config.test.ts` (`<будет создан>`) с таблицей этой спецификации.
 - **Применимость**: frontend, CI.
 
@@ -161,7 +161,7 @@
 ### SYS-07-R18 Зеркалирование иконок — по фиксированному перечню
 
 - **Формулировка**: иконки lucide должны использоваться через обёртку `src/components/ui/icon.tsx`, которая добавляет класс `rtl:-scale-x-100` для иконок из перечня `RTL_MIRRORED_ICONS` в `src/components/ui/icons/rtl-mirrored.ts`; стартовый перечень: `ArrowLeft`, `ArrowRight`, `ArrowLeftRight`, `ArrowUpLeft`, `ArrowUpRight`, `ArrowDownLeft`, `ArrowDownRight`, `ChevronLeft`, `ChevronRight`, `ChevronsLeft`, `ChevronsRight`, `ChevronFirst`, `ChevronLast`, `CornerDownLeft`, `CornerDownRight`, `CornerUpLeft`, `CornerUpRight`, `Undo2`, `Redo2`, `Reply`, `ReplyAll`, `Forward`, `LogIn`, `LogOut`, `PanelLeft`, `PanelRight`, `PanelLeftOpen`, `PanelLeftClose`, `PanelRightOpen`, `PanelRightClose`, `Indent`, `Outdent`, `ListStart`, `ListEnd`, `SkipBack`, `SkipForward`, `StepBack`, `StepForward`, `MessageSquareReply`, `Send`, `ExternalLink`, `TextQuote`; не зеркалируются: `Play`, `Pause`, `Volume2`, `VolumeX`, `Check`, `X`, `Search`, `Clock`, `Calendar`, `RotateCw`, `RotateCcw`, `RefreshCw`, `Trash2`, `Settings`, `User`, `Globe`, `Languages`; импорт иконок lucide напрямую в `src/features/**` запрещён.
-- **Обоснование**: в RTL стрелка «далее» указывает влево; медиа-кнопки, часы и галочки не зеркалируются по соглашениям Material и Apple HIG; единая обёртка исключает забытые иконки.
+- **Обоснование**: в RTL стрелка «далее» указывает влево; медиа-кнопки, часы и галочки не зеркалируются по соглашениям Material и Apple HIG; единая обёртка исключает забытые иконки; стартовый перечень — рабочий, окончательный утверждается по ревью носителем арабского языка (OQ-82).
 - **Проверка**: ESLint `no-restricted-imports` для `lucide-react` вне `src/components/ui` (`<будет создан>`); Storybook-история `Icon/RtlMirrored` со всеми иконками перечня в `direction: rtl`; E2E проект `ar` сравнивает скриншот компонента навигации.
 - **Применимость**: frontend, CI.
 
@@ -430,6 +430,7 @@ export function formatDateTime(iso: string, lng: UiLanguage, timeZone: string): 
 |---|---|---|---|
 | [OQ-25](../../open-questions.md) | Язык интерфейса по умолчанию и порядок определения | да | planned → решает SYS-07 (R3, R4, R6): профиль → cookie `flt_ui_language` → `Accept-Language`/`navigator.languages` → `ru`; без префикса в URL |
 | [OQ-49](../../open-questions.md) | Модуль-владелец уведомлений | нет | planned → SYS-01 (черновик SYS-01 решает: отдельный модуль `notifications`, этап 5); R13 применяется к `notifications` и к транзакционным письмам `identity` |
+| [OQ-82](../../open-questions.md) | Перечень зеркалируемых иконок (R18) и `allowedStrings` правила `react/jsx-no-literals` (R9) | нет | open: стартовые перечни зафиксированы здесь, окончательные — после ревью на этапе 2 |
 | [OQ-44](../../open-questions.md) | Точный перечень европейских языков | нет | planned → ТЗ STU-08; реестр R24 принимает любой набор кодов |
 
 ## 10. История изменений
@@ -437,3 +438,4 @@ export function formatDateTime(iso: string, lng: UiLanguage, timeZone: string): 
 | Версия | Дата | Автор | Что изменилось | Статус |
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
+| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: шапка — `timezone` хранится в `identity.users` (как в разделе 4 и SYS-01), а не в `learner_profile`; R9 и R18 — стартовые перечни `allowedStrings` и зеркалируемых иконок, окончательные — OQ-82; раздел 9 — OQ-82 | draft |
