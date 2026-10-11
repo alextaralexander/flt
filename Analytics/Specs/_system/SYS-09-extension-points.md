@@ -2,14 +2,14 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | draft |
-| Версия | 0.1 |
-| Дата | 2026-10-10 |
+| Статус | approved |
+| Версия | 1.0 |
+| Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-11 (PR #3) |
 | Пункт(ы) BRD | STU-25, STU-30, STU-31, ADM-04 (плагины, этап 7 — здесь закладываются интерфейсы); STU-01–STU-05 (провайдеры LLM), STU-08–STU-11 (реестр языков), STU-13, STU-28 (провайдеры речи), STU-20–STU-23 (типы заданий, экзамены) |
 | Модуль | shared kernel (`app/core/extensions`), app_shell (`src/lib/extension-points`), владельцы точек: `languages`, `llm_gateway`, `speech`, `lessons`, `assessment`; все модули — через `ModuleDefinition.extension_points` |
-| Зависимости | ADR-002 (`ModuleDefinition`, подпакет `public`, import-linter), ADR-004 (декларации топиков `topics.py`, контейнер зависимостей), ADR-005 (зоны ESLint, запрет barrel-файлов), SYS-08 (интерфейсы `LLMProvider`, `EmbeddingsProvider`, провайдеры речи) |
+| Зависимости | ADR-002 (`ModuleDefinition`, подпакет `public`, import-linter), ADR-004 (декларации топиков `public/topics.py`, контейнер зависимостей), ADR-005 (зоны ESLint, запрет barrel-файлов), SYS-08 (интерфейсы `LLMProvider`, `EmbeddingsProvider`, провайдеры речи) |
 | Связанные ADR/SYS | ADR-008 (локальный агент как реализация провайдера `local`), ADR-009 (стрим провайдера), ADR-014 (`search.py` как декларация модуля), SYS-01 (владельцы точек), SYS-04 (публичные топики), SYS-05 (реестры неизменяемы после старта), SYS-07 (реестр языков), SYS-10 (тесты точек расширения), SYS-13 (реализация плагинов, этап 7); OQ-27 |
 
 ## 1. Цель и область действия
@@ -34,7 +34,7 @@
 | Вклад (`contribution`) | Конкретная реализация контракта точки, зарегистрированная в реестре: провайдер `openai_compatible` в точке `llm_gateway.providers`, кнопка в слоте `lesson.toolbar`. На этапах 1–6 вклады вносят только модули монолита, с этапа 7 — также плагины |
 | Реестр точки (`ExtensionRegistry[T]`) | Типизированная коллекция вкладов одной точки: неизменяема после старта процесса, доступна по имени точки через контейнер shared kernel |
 | Контракт точки | `typing.Protocol` (backend) или TypeScript-интерфейс (frontend) с семантической версией; вклад обязан ему соответствовать |
-| Публичный топик | Топик Kafka, объявленный модулем с `visibility = "public"`: его события разрешено доставлять плагинам (с этапа 7). Остальные топики — внутренние |
+| Публичный топик | Топик Kafka, объявленный модулем с `visibility = "public"`: на него могут подписываться консьюмеры других модулей (SYS-04-R21), а с этапа 7 его события разрешено доставлять плагинам. Остальные топики — внутренние: их читает только сам модуль |
 
 ## 3. Требования
 
@@ -82,9 +82,9 @@
 
 ### SYS-09-R7 Точка `llm_gateway.providers`
 
-- **Формулировка**: модуль `llm_gateway` должен объявить точку `llm_gateway.providers` версии `1.0.0` с контрактом `LLMProvider` из SYS-08 (`@runtime_checkable` `Protocol`: свойство `id`, метод `capabilities() -> ProviderCapabilities`, `stream_completion(...)` — async-генератор по ADR-009, `list_models(...)`, `check_connection(...)`; точные сигнатуры — SYS-08), `cardinality = "many"`; на этапе 1 вклады — `stub` (детерминированная заглушка record/replay для тестов) и `openai_compatible`; провайдер `local` (ADR-008) регистрируется модулем `local_runtime` на этапе 4 как вклад в ту же точку; точка `llm_gateway.embeddings_providers` (контракт `EmbeddingsProvider`, ADR-014, SYS-08) объявляется тогда же версии `1.0.0` с вкладом `stub` на этапе 1 и `platform` на этапе 5 (OQ-59).
+- **Формулировка**: модуль `llm_gateway` должен объявить точку `llm_gateway.providers` версии `1.0.0` с контрактом `ProviderKindInfo` из SYS-08-R4 (вид провайдера: `kind`, `factory`, `jurisdiction`, `auth_mode`, `display_name_key`, `default_base_url`, `stage`), где `factory` создаёт на одно подключение адаптер `LLMProvider` из SYS-08-R2 (`@runtime_checkable` `Protocol`: свойство `kind`, методы `complete`, `stream_completion` — async-генератор `Delta` по ADR-009, `list_models`, `capabilities(llm_model) -> ModelCapabilities`, `check_connection`, `count_tokens`; точные сигнатуры — SYS-08-R2), `cardinality = "many"`; на этапе 1 вклады — `stub` (детерминированная заглушка record/replay для тестов) и `openai_compatible`; провайдер `local` (ADR-008) регистрируется модулем `local_runtime` на этапе 4 как вклад в ту же точку; точка `llm_gateway.embeddings_providers` (контракт `EmbeddingsProvider`, ADR-014, SYS-08-R21: реализации эмбеддингов платформенные и не создаются на подключение ученика) объявляется тогда же версии `1.0.0` с вкладом `stub` на этапе 1 и `platform` на этапе 5 (OQ-59).
 - **Обоснование**: CLAUDE.md «LLM-агностичность»; глоссарий «Провайдер LLM»: «реестр провайдеров — точка расширения для плагинов»; SDD_plan.md этап 1 Г.6; критерий выхода этапа 7 — «плагин добавляет LLM-провайдера».
-- **Проверка**: тест модуля `tests/modules/llm_gateway/test_provider_registry.py` (`<будет создан>`, этап 1 Г.6): реестр содержит `stub` и `openai_compatible`, оба проходят `isinstance(..., LLMProvider)`; негативный тест: вклад без `stream_completion` не регистрируется; выбор провайдера по `id` из `provider_binding` ученика (SYS-08) идёт через реестр, а не через `if`.
+- **Проверка**: тест модуля `tests/modules/llm_gateway/unit/test_provider_registry.py` (`<будет создан>`, этап 1 Г.6): реестр содержит виды `stub` и `openai_compatible`, адаптеры, созданные их фабриками для тестового подключения, проходят `isinstance(..., LLMProvider)`; негативный тест: вклад, фабрика которого возвращает объект без `stream_completion`, не регистрируется; выбор вида по `kind` подключения ученика (`llm_gateway.provider_bindings`, SYS-08-R6) идёт через реестр, а не через `if`.
 - **Применимость**: backend, tests.
 
 ### SYS-09-R8 Точка `languages.registry`
@@ -96,7 +96,7 @@
 
 ### SYS-09-R9 Точки провайдеров речи
 
-- **Формулировка**: модуль `speech` (этап 5) должен объявить точки `speech.stt_providers` и `speech.tts_providers` версии `1.0.0` с контрактами `STTProvider` и `TTSProvider` из SYS-08 (потоковые интерфейсы ADR-009: `stream_transcribe(audio_frames, language) -> AsyncIterator[Transcript]`, `stream_synthesize(text, voice, language) -> AsyncIterator[bytes]`, `voices(language) -> list[Voice]`, `capabilities()`), `cardinality = "many"`; вклады `stub` обязательны с момента появления модуля; провайдер через локальный агент — вклад `local` модуля `local_runtime`.
+- **Формулировка**: модуль `speech` (этап 5) должен объявить точки `speech.stt_providers` и `speech.tts_providers` версии `1.0.0` с контрактом `SpeechProviderKindInfo` из SYS-08-R22, `factory` которого создаёт адаптеры `STTProvider` и `TTSProvider` (потоковые интерфейсы ADR-009: `stream_transcribe(frames, *, language, sample_rate) -> AsyncIterator[Transcript]`, `stream_synthesize(text, *, voice, language, sample_rate) -> AsyncIterator[AudioFrame]`, `list_voices(language=None) -> list[Voice]`, `capabilities() -> SpeechCapabilities`, `check_connection() -> ConnectionCheck`; точные сигнатуры — SYS-08-R22), `cardinality = "many"`; вклады `stub` обязательны с момента появления модуля; провайдер через локальный агент — вклад `local` модуля `local_runtime`.
 - **Обоснование**: CLAUDE.md «Синтез и распознавание речи: через провайдеров по аналогии с LLM»; STU-13, STU-28, STU-34.2.
 - **Проверка**: тест модуля `speech` (этап 5) по образцу R7; архитектурный тест R1 (имя `speech.*`, объявление в `public/extension_points.py`).
 - **Применимость**: backend, tests.
@@ -117,7 +117,7 @@
 
 ### SYS-09-R12 События Kafka как точка расширения: публичные топики
 
-- **Формулировка**: декларация топика модуля (`TopicDeclaration` в `public/topics.py`, ADR-004 и SYS-04) должна содержать поле `visibility: Literal["internal", "public"]` со значением `internal` по умолчанию; событие, помеченное `public`, должно иметь схему payload без персональных данных сверх идентификаторов (SYS-02) и записываться в раздел «События» спецификации модуля с пометкой «публичное»; плагины (этап 7) получают события только публичных топиков через механизм доставки SYS-13 и никогда не подключаются к Kafka напрямую; смена `public` → `internal` — по правилу устаревания R4.
+- **Формулировка**: декларация топика модуля (`TopicDeclaration` в `public/topics.py`, ADR-004 и SYS-04) должна содержать поле `visibility: Literal["internal", "public"]` со значением `internal` по умолчанию (`internal` — только консьюмеры самого модуля, `public` — консьюмеры других модулей и плагины, SYS-04-R21); событие, помеченное `public`, должно иметь схему payload без персональных данных сверх идентификаторов (SYS-02) и записываться в раздел «События» спецификации модуля с пометкой «публичное»; плагины (этап 7) получают события только публичных топиков через механизм доставки SYS-13 и никогда не подключаются к Kafka напрямую; смена `public` → `internal` — по правилу устаревания R4.
 - **Обоснование**: CLAUDE.md «Взаимодействие»: Kafka наружу не публикуется, модуль публикует только свои события; плагинам нужна реакция на факты (`lessons.lesson_completed`, `progress.level_changed`), но не доступ к брокеру и не все события.
 - **Проверка**: тест SYS-04 на декларации топиков дополняется проверкой поля `visibility`; тест `tests/architecture/test_public_topics_have_no_pii.py` (`<будет создан>`): payload-схемы публичных топиков не содержат полей из списка запрещённых имён (`email`, `phone`, `display_name`, `content`, `text`, `transcript`, `audio`); перечень публичных топиков генерируется в `Analytics/traceability.md` (SYS-12).
 - **Применимость**: backend, tests.
@@ -211,26 +211,41 @@ class ExtensionContribution:
 ```python
 # app/modules/llm_gateway/public/extension_points.py
 from app.core.extensions import ExtensionPoint
-from app.modules.llm_gateway.public.interfaces import EmbeddingsProvider, LLMProvider
+from app.modules.llm_gateway.public.providers import EmbeddingsProvider, ProviderKindInfo
 
-LLM_PROVIDERS = ExtensionPoint[LLMProvider](name="llm_gateway.providers", version="1.0.0", contract=LLMProvider)
+LLM_PROVIDERS = ExtensionPoint[ProviderKindInfo](name="llm_gateway.providers", version="1.0.0", contract=ProviderKindInfo)
 EMBEDDINGS_PROVIDERS = ExtensionPoint[EmbeddingsProvider](
     name="llm_gateway.embeddings_providers", version="1.0.0", contract=EmbeddingsProvider
 )
 ```
 
 ```python
-# app/modules/llm_gateway/public/interfaces.py (фрагмент; полные сигнатуры — SYS-08)
+# app/modules/llm_gateway/public/providers.py (фрагмент; полные сигнатуры — SYS-08-R2, R4)
 @runtime_checkable
 class LLMProvider(Protocol):
-    """Контракт провайдера LLM — точка расширения llm_gateway.providers v1."""
+    """Адаптер провайдера LLM на одно подключение; создаётся фабрикой вклада llm_gateway.providers v1."""
 
     @property
-    def id(self) -> str: ...
-    def capabilities(self) -> ProviderCapabilities: ...
-    async def list_models(self, binding: ProviderBinding) -> list[ModelInfo]: ...
-    async def check_connection(self, binding: ProviderBinding) -> ConnectionCheck: ...
-    def stream_completion(self, request: CompletionRequest, binding: ProviderBinding) -> AsyncIterator[CompletionChunk]: ...
+    def kind(self) -> str: ...
+    async def complete(self, request: CompletionRequest) -> CompletionResult: ...
+    def stream_completion(self, request: CompletionRequest) -> AsyncIterator[Delta]: ...
+    async def list_models(self) -> list[ModelInfo]: ...
+    async def capabilities(self, llm_model: str) -> ModelCapabilities: ...
+    async def check_connection(self) -> ConnectionCheck: ...
+    def count_tokens(self, request: CompletionRequest) -> int | None: ...
+
+
+@dataclass(frozen=True)
+class ProviderKindInfo:
+    """Вклад в точку llm_gateway.providers: вид провайдера и фабрика адаптера."""
+
+    kind: str
+    factory: Callable[[ProviderBindingConfig, ProviderCredentials | None], LLMProvider]
+    jurisdiction: Jurisdiction
+    auth_mode: Literal["api_key", "agent", "none"]
+    display_name_key: str
+    default_base_url: str | None
+    stage: int
 ```
 
 ```python
@@ -255,15 +270,15 @@ from app.modules.llm_gateway.public import LLM_PROVIDERS  # только public
 module = ModuleDefinition(
     name="local_runtime",
     ...,
-    contributions=(ExtensionContribution(point=LLM_PROVIDERS.name, point_version="^1.0", id="local", provider=LocalAgentProvider),),
+    contributions=(ExtensionContribution(point=LLM_PROVIDERS.name, point_version="^1.0", id="local", provider=LOCAL_PROVIDER_KIND),),  # ProviderKindInfo(kind="local", factory=LocalAgentProvider, …)
 )
 ```
 
-Использование в `lessons`:
+Использование в сервисе `llm_gateway` (другие модули вызывают только `LlmGatewayService`, SYS-08-R1):
 
 ```python
-providers = registry.resolve(LLMProvider, point="llm_gateway.providers")   # ExtensionRegistry[LLMProvider]
-provider = providers.get(binding.provider_id)                              # KeyError → ошибка PROVIDER_UNKNOWN
+kinds = registry.resolve(ProviderKindInfo, point="llm_gateway.providers")   # ExtensionRegistry[ProviderKindInfo]
+adapter = kinds.get(binding.kind).factory(binding_config, credentials)       # KeyError → 422 core.validation_failed (SYS-08-R4)
 ```
 
 Неправильно: `from app.modules.llm_gateway.providers.openai_compatible import OpenAICompatibleProvider` в `lessons` (нарушает R3 и ADR-002); `PROVIDERS = {"openai": ..., "local": ...}` словарём в `lessons` (нарушает R15).
@@ -350,7 +365,7 @@ contributes:
     - id: hebrew_pack.niqqud_toggle
       entry: ui/niqqud-toggle.js
 permissions:
-  - lessons.read
+  - lessons:lessons:read        # формат кода права — SYS-06-R2
 subscribes:
   - flt.lessons.lesson_completed.v1
 ui:
@@ -363,20 +378,24 @@ ui:
 ### Пример 4. Публичный топик (SYS-09-R12)
 
 ```python
-# app/modules/lessons/brokers/topics.py
+# app/modules/lessons/public/topics.py
 LESSON_COMPLETED = TopicDeclaration(
     name="flt.lessons.lesson_completed.v1",
-    partitions=6,
-    retention_days=7,
-    payload=LessonCompletedPayload,      # lesson_id, user_id, learning_language, duration_seconds — без текста диалога
+    kind="event",
     visibility="public",
+    partitions=6,
+    retention=timedelta(days=7),
+    message_model=LessonCompleted,       # payload: lesson_id, user_id, learning_language, duration_seconds — без текста диалога
+    description="Занятие завершено.",
 )
 LESSON_MESSAGE_SENT = TopicDeclaration(
     name="flt.lessons.message_sent.v1",
-    partitions=6,
-    retention_days=7,
-    payload=LessonMessageSentPayload,    # содержит text — только internal
+    kind="event",
     visibility="internal",
+    partitions=6,
+    retention=timedelta(days=7),
+    message_model=LessonMessageSent,     # payload содержит text — только internal
+    description="Сообщение в занятии отправлено.",
 )
 ```
 
@@ -392,7 +411,7 @@ LESSON_MESSAGE_SENT = TopicDeclaration(
 
 - Выполнение кода плагинов, песочница, права, модерация, каталог, установка, вайбкодинг — SYS-13, ТЗ STU-25, STU-30, STU-31, ADM-04 (этап 7).
 - Способ загрузки UI-бандлов плагинов (module federation или iframe с `postMessage`) — SYS-13; контракт слота R5 обязан это допускать.
-- Полные сигнатуры `LLMProvider`, `EmbeddingsProvider`, `STTProvider`, `TTSProvider`, `ProviderCapabilities` — SYS-08.
+- Полные сигнатуры `LLMProvider`, `ProviderKindInfo`, `EmbeddingsProvider`, `STTProvider`, `TTSProvider`, `ModelCapabilities`, `SpeechCapabilities` — SYS-08.
 - MCP-серверы и скилы (STU-25) — не точки расширения платформы, а настройки harness конкретного ученика (SYS-08, OQ-56, OQ-57).
 - Расширение Kafka внешними сервисами (вне монолита) — появляется только при выделении микросервисов; здесь — лишь признак `visibility`.
 - Точки расширения локального агента (новые движки сверх LM Studio и llama.cpp) — ADR-008 и ТЗ этапов 4–5; агент не исполняет плагины платформы.
@@ -402,7 +421,7 @@ LESSON_MESSAGE_SENT = TopicDeclaration(
 | ADR | Связь | Что берётся |
 |---|---|---|
 | [ADR-002](../../ADR/ADR-002-module-layout.md) | основан на | `ModuleDefinition`, подпакет `public`, контракты import-linter; спецификация добавляет поля `extension_points` и `contributions` и файл `public/extension_points.py` |
-| [ADR-004](../../ADR/ADR-004-communication-patterns.md) | основан на | контейнер зависимостей и `Protocol` для вызовов между модулями (R3); декларации топиков `topics.py` (R12) |
+| [ADR-004](../../ADR/ADR-004-communication-patterns.md) | основан на | контейнер зависимостей и `Protocol` для вызовов между модулями (R3); декларации топиков `public/topics.py` (R12) |
 | [ADR-005](../../ADR/ADR-005-frontend-stack.md) | основан на | зоны ESLint между модулями, запрет barrel-файлов, связывание в `src/app` (R5) |
 | [ADR-009](../../ADR/ADR-009-llm-streaming-and-voice.md) | уточняет | `stream_completion` как async-генератор — часть контракта `LLMProvider`; потоковые STT и TTS |
 | [ADR-008](../../ADR/ADR-008-local-agent.md) | уточняет | провайдер `local` — вклад модуля `local_runtime` в `llm_gateway.providers` |
@@ -422,3 +441,5 @@ LESSON_MESSAGE_SENT = TopicDeclaration(
 | Версия | Дата | Автор | Что изменилось | Статус |
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
+| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R7 — контракт точки `llm_gateway.providers` — `ProviderKindInfo` с фабрикой адаптера `LLMProvider`, сигнатуры совпадают с SYS-08-R2, R4 (`stream_completion`, `kind`, без параметра подключения); R9 — сигнатуры `STTProvider`/`TTSProvider` по SYS-08-R22; R12 — смысл `visibility` согласован с SYS-04-R21 (`public` — другие модули и плагины); примеры 2 и 4 — `public/providers.py`, вклад `local` и выбор вида в сервисе `llm_gateway` вместо `lessons`, `public/topics.py` и поля `TopicDeclaration` по SYS-04; пример манифеста — право в формате SYS-06 `lessons:lessons:read`; путь теста реестра провайдеров — `tests/modules/llm_gateway/unit/` (раскладка SYS-10) | draft |
+| 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |

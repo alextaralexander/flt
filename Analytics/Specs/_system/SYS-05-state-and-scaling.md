@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | draft |
-| Версия | 0.1 |
-| Дата | 2026-10-10 |
+| Статус | approved |
+| Версия | 1.0 |
+| Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-11 (PR #3) |
 | Пункт(ы) BRD | все |
 | Модуль | все (shared kernel — реализация; каждый доменный модуль — соблюдение) |
 | Зависимости | ADR-003, ADR-004 (accepted); SYS-01 (карта модулей — для контрактов import-linter), SYS-04 (протокол WebSocket и Kafka — для требований R24–R31) |
@@ -147,9 +147,10 @@
 | Распределённая блокировка (`<module>:lock:<name>`, `shared_kernel:lock:outbox:<module>`) | 60 с без продления; с heartbeat-продлением — до завершения задачи, каждое продление ≤ 60 с | ADR-003, ADR-004 |
 | Блокировка планировщика (`shared_kernel:lock:schedule:<module>.<task>`) | интервал задачи, но не более 24 ч | ADR-004 |
 | Сессия и отзывы (`identity:session:<sid>` — 24 ч с продлением; `identity:revoked_sid:*`, `identity:revoked_user:*` — 600 с; `identity:login_fail*` — 900 с; `identity:oauth:<state>` — 600 с) | по ADR-006 | ADR-006 |
-| Состояние быстрого теста (`assessment:quick_test:*`) | 24 ч | OQ-09 |
+| Состояние быстрого теста (`assessment:quick_test:<anon_session_id>`, идентификатор — из cookie `flt_anon_session`) | 24 ч | OQ-09, OQ-77 |
 | Реестр агентов (`local_runtime:agent:<id>:instance`) | 90 с с продлением по heartbeat | ADR-008, ADR-009 |
 | Флаг отмены задания (`<module>:job_cancel:<id>`) | 1 ч | ADR-009 |
+| Сохранённый ответ идемпотентного запроса (`shared_kernel:idempotency:<subject>:<key>`) | 24 ч | SYS-03-R18 |
 | Счётчик соединений WebSocket (`shared_kernel:ws:conns:<user_id>`) | 60 с с продлением | ADR-004 |
 | Присутствие онлайн (`classroom:presence:*`, этап 6) | 120 с с продлением | этап 6, ТЗ TCH-08 |
 
@@ -600,7 +601,7 @@ async def test_quick_test_returns_503_with_retry_after(client: AsyncClient, redi
     # Assert: лимит модели платформы — fail-closed
     assert response.status_code == 503
     assert response.headers["Retry-After"] == "30"
-    assert response.json()["error"]["code"] == "quick_test_unavailable"
+    assert response.json()["messages"]["ERROR"][0]["code"] == "assessment.quick_test_unavailable"
     assert llm_stub.calls == 0                      # токены модели платформы не потрачены
 ```
 
@@ -727,12 +728,12 @@ def stop_instance() -> Iterator[Callable[[str], None]]:
 @pytest.mark.ac("STU-18-AC3")
 async def test_steps_on_different_instances_are_consistent(on_instance: OnInstance, learner: LearnerSession) -> None:
     # Arrange: создание на инстансе 1
-    created = await on_instance(1).post("/api/v1/learning_plan/plans", json=learner.plan_request(), cookies=learner.cookies)
+    created = await on_instance(1).post("/api/v1/learning-plan/plans", json=learner.plan_request(), cookies=learner.cookies)
     plan_id, version = created.json()["id"], created.json()["version"]
     # Act: чтение на инстансе 2, изменение на инстансе 3
-    read = await on_instance(2).get(f"/api/v1/learning_plan/plans/{plan_id}", cookies=learner.cookies)
+    read = await on_instance(2).get(f"/api/v1/learning-plan/plans/{plan_id}", cookies=learner.cookies)
     updated = await on_instance(3).patch(
-        f"/api/v1/learning_plan/plans/{plan_id}", json={"intensity": "high", "version": version}, cookies=learner.cookies,
+        f"/api/v1/learning-plan/plans/{plan_id}", json={"intensity": "high", "version": version}, cookies=learner.cookies,
     )
     # Assert: каждый шаг видит результат предыдущего, инстансы действительно разные
     assert read.status_code == 200 and read.json()["version"] == version
@@ -750,7 +751,7 @@ async def test_concurrent_updates_do_not_lose_changes(on_instance: OnInstance, p
     responses = await asyncio.gather(*(on_instance(i).patch(plan.url, json=body(i), cookies=plan.cookies) for i in (1, 2, 3)))
     codes = sorted(r.status_code for r in responses)
     assert codes == [200, 409, 409]
-    assert all(r.json()["error"]["code"] == "core.version_conflict" for r in responses if r.status_code == 409)
+    assert all(r.json()["messages"]["ERROR"][0]["code"] == "core.version_conflict" for r in responses if r.status_code == 409)
     final = await on_instance(2).get(plan.url, cookies=plan.cookies)
     assert final.json()["version"] == plan.version + 1
 ```
@@ -763,11 +764,11 @@ async def test_concurrent_updates_do_not_lose_changes(on_instance: OnInstance, p
 async def test_event_from_other_instance_is_delivered(ws: WsFactory, on_instance: OnInstance, learner: LearnerSession) -> None:
     async with ws(on_instance(1).url, cookies=learner.cookies) as socket:
         await socket.subscribe("learning_plan.jobs:" + learner.job_id)
-        await on_instance(2).post(f"/api/v1/learning_plan/jobs/{learner.job_id}/retry", cookies=learner.cookies)
+        await on_instance(2).post(f"/api/v1/learning-plan/jobs/{learner.job_id}/retry", cookies=learner.cookies)
         event = await socket.receive(type="learning_plan.job.progress", timeout=2.0)
         assert event["channel"] == "learning_plan.jobs:" + learner.job_id
     # восстановление состояния после переподключения — по REST-эндпоинту канала (R25)
-    state = await on_instance(3).get(f"/api/v1/learning_plan/jobs/{learner.job_id}", cookies=learner.cookies)
+    state = await on_instance(3).get(f"/api/v1/learning-plan/jobs/{learner.job_id}", cookies=learner.cookies)
     assert state.json()["status"] in {"running", "succeeded"}
 ```
 
@@ -778,12 +779,12 @@ async def test_event_from_other_instance_is_delivered(ws: WsFactory, on_instance
 @pytest.mark.smoke
 @pytest.mark.ac("STU-18-AC8")
 async def test_scenario_survives_instance_stop(stand: Stand, on_instance: OnInstance, stop_instance: StopInstance, learner: LearnerSession) -> None:
-    created = await on_instance(2).post("/api/v1/learning_plan/plans", json=learner.plan_request(), cookies=learner.cookies)
+    created = await on_instance(2).post("/api/v1/learning-plan/plans", json=learner.plan_request(), cookies=learner.cookies)
     plan_id = created.json()["id"]
     stop_instance("flt-api-2")                     # посреди сценария; teardown вернёт контейнер
     await stand.wait_server_down("flt-api-2", timeout=10)
     # продолжение через HAProxy попадает только на живые инстансы
-    read = await stand.client.get(f"/api/v1/learning_plan/plans/{plan_id}", cookies=learner.cookies)
+    read = await stand.client.get(f"/api/v1/learning-plan/plans/{plan_id}", cookies=learner.cookies)
     assert read.status_code == 200
     assert read.headers["X-Instance-Id"] != created.headers["X-Instance-Id"]
 ```
@@ -807,7 +808,7 @@ async def test_scenario_survives_instance_stop(stand: Stand, on_instance: OnInst
 
 - Конкретные значения лимитов (быстрый тест, попытки входа) и сроки хранения данных — SYS-02 и SYS-08; здесь только механизм и максимумы TTL.
 - Формат конверта WebSocket, имена каналов, envelope событий Kafka, ретраи и DLQ — SYS-04 (по ADR-004).
-- Конвенции REST: поле `version` в запросах, коды `409 version_conflict` и `already_exists` в `ErrorResponseV1`, `Idempotency-Key` — SYS-03.
+- Конвенции REST: поле `version` в запросах, коды `409 core.version_conflict` и `409 <module>.<state_error>` (нарушение уникальности) в `ErrorResponseV1` (SYS-03-R7, R17), `Idempotency-Key` — SYS-03.
 - Конфигурация стендов (PostgreSQL `max_connections`, Redis `maxmemory`, Sentinel в Helm, `values-ci.yaml`, бэкапы), тест паритета compose и Helm и чек-лист VPS — SYS-11.
 - Разведение тестовой БД и стенда local, фикстуры `redis_down`, `redis_no_persistent_keys`, `db_migrate`, заглушка LLM — SYS-10 (OQ-31).
 - Состав job-ов CI, обязательные проверки и бюджет минут — SYS-12 (по ADR-011).
@@ -841,6 +842,7 @@ async def test_scenario_survives_instance_stop(stand: Stand, on_instance: OnInst
 | [OQ-31](../../open-questions.md) | Разведение тестовой БД и стенда local | нет | planned → SYS-10; SYS-05 использует базу `flt_test` в R37 и R44 по решению SYS-10 |
 | [OQ-71](../../open-questions.md) | Хранение отозванных refresh-токенов и одноразовых токенов | нет | planned → SYS-02 (сроки) и SYS-05 (задача): часть SYS-05 решена в R43 — задача `identity.purge_tokens`, ежесуточно, пачками по 10 000 под блокировкой; сроки утверждает SYS-02 |
 | [OQ-30](../../open-questions.md) | HPA в Kubernetes | нет | planned → SYS-11; формула R40 — вход для верхней границы реплик |
+| [OQ-77](../../open-questions.md) | Анонимная сессия быстрого теста: cookie `flt_anon_session`, состояние в Redis с TTL 24 ч | нет | open: рабочее решение принято (таблица TTL Redis) |
 | [OQ-68](../../open-questions.md) | Self-hosted runner | нет | deferred; влияет только на состав профиля `ci` стенда N3 (раздел 6) |
 
 ## 10. История изменений
@@ -848,3 +850,5 @@ async def test_scenario_survives_instance_stop(stand: Stand, on_instance: OnInst
 | Версия | Дата | Автор | Что изменилось | Статус |
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
+| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: пути REST в примерах — сегмент `learning-plan` (SYS-03-R1); проверки кода ошибки в примерах — по конверту SYS-03-R7 (`messages.ERROR[0].code`, `assessment.quick_test_unavailable`); раздел 7 — коды `core.version_conflict` и `<module>.<state_error>`; ключ состояния быстрого теста — по анонимной сессии `flt_anon_session` (OQ-77); раздел 9 — OQ-77; таблица TTL Redis — ключ `Idempotency-Key` (SYS-03-R18) | draft |
+| 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |

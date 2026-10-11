@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | draft |
-| Версия | 0.1 |
-| Дата | 2026-10-10 |
+| Статус | approved |
+| Версия | 1.0 |
+| Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-11 (PR #3) |
 | Пункт(ы) BRD | все |
 | Модуль | все backend-модули, shared kernel (`app/core/http`), frontend (сгенерированный клиент), `src/tools/contracts` |
 | Зависимости | ADR-002, ADR-003, ADR-004, ADR-006, ADR-010, ADR-011, ADR-012 |
@@ -42,7 +42,7 @@
 ### SYS-03-R1 Префикс пути `/api/v1/<module>`
 
 - **Формулировка**: каждый REST-роутер модуля должен монтироваться с префиксом `/api/v1/<module>`, где `<module>` — имя модуля из карты модулей SYS-01, в котором символ `_` заменён на `-` (`llm_gateway` → `/api/v1/llm-gateway`, `learning_plan` → `/api/v1/learning-plan`, `identity` → `/api/v1/identity`); единственное исключение — дополнительный префикс `/api/v1/auth` модуля `identity`.
-- **Обоснование**: ADR-004, раздел 3.2 (префикс `/api/v1/<module>`, HAProxy путь не переписывает, при выделении модуля маршрут переключается без изменения клиентов); ADR-002 (`ModuleDefinition.extra_prefixes`, тест `test_router_prefix_matches_module`); глоссарий, правило 2 (REST-ресурсы — kebab-case); имя бакета `flt-<module>` в ADR-007 использует ту же замену `_` → `-`. Пример `GET /api/v1/learning_plan/jobs/{id}` в ADR-004 (раздел 3.3) читается как `/api/v1/learning-plan/jobs/{id}`.
+- **Обоснование**: ADR-004, раздел 3.2 (префикс `/api/v1/<module>`, HAProxy путь не переписывает, при выделении модуля маршрут переключается без изменения клиентов); ADR-002 (`ModuleDefinition.extra_prefixes`, тест `test_router_prefix_matches_module`); глоссарий, правило 2 (REST-ресурсы — kebab-case); имя бакета `flt-<module>` в ADR-007 использует ту же замену `_` → `-`. Пример `GET /api/v1/learning-plan/jobs/{id}` в ADR-004 (раздел 3.3) приведён к этому правилу в версии 1.1 ADR-004.
 - **Проверка**: архитектурный тест `tests/architecture/test_router_prefix_matches_module.py` (ADR-002, раздел 3.6) с правилом замены `_` → `-`; `extra_prefixes` непуст только у `identity` и равен `("/api/v1/auth",)`.
 - **Применимость**: backend.
 
@@ -69,7 +69,7 @@
 
 ### SYS-03-R5 Имена параметров пути
 
-- **Формулировка**: параметр пути, идентифицирующий ресурс, должен называться `<entity>_id` в snake_case по имени сущности в единственном числе (`{course_id}`, `{enrollment_id}`, `{provider_connection_id}`); имя `{id}` без префикса не используется.
+- **Формулировка**: параметр пути, идентифицирующий ресурс, должен называться `<entity>_id` в snake_case по имени сущности в единственном числе (`{course_id}`, `{enrollment_id}`, `{provider_binding_id}`); имя `{id}` без префикса не используется.
 - **Обоснование**: при вложенности двух уровней `{id}` неоднозначен; одинаковые имена во всех модулях упрощают генерацию клиента и логи (`endpoint` метрик — шаблон маршрута, ADR-010).
 - **Проверка**: правило Spectral `flt-path-param-name` (`^[a-z][a-z0-9_]*_id$` для каждого `parameters[in=path].name`).
 - **Применимость**: backend, CI.
@@ -84,7 +84,7 @@
 ### SYS-03-R7 Конверт ошибки `ErrorResponseV1`
 
 - **Формулировка**: любой ответ монолита с кодом 4xx или 5xx на путях `/api/*` должен иметь `Content-Type: application/json` и тело по схеме `ErrorResponseV1` из `app/core/http/schemas.py`: `{"messages": {"INFO": [], "WARNING": [], "ERROR": [<ErrorMessage>]}, "payload": null, "request_id": "<uuid>"}`, где `ErrorMessage` — `{"code": "<module>.<error_name>", "message": "<текст для разработчика, английский>", "details": {<объект>}}`; массив `ERROR` содержит ровно один элемент; обработчики исключений регистрируются только через `error_envelope()` shared kernel.
-- **Обоснование**: CLAUDE.md «Backend-сервис (boilerplate)»: ошибки в едином конверте `ErrorResponseV1`; `src/backend/py-monolyth/app/api/exception_handlers.py` (функция `error_envelope`, обработчики доменных ошибок, 422 и `HTTPException`) и `app/core/middlewares/logging_middleware.py` (500 в том же конверте). Поля `message_mnemo_code` и `parameters` boilerplate (`app/core/schemas.py`) переименованы в `code` и `details`, добавлены `message` и `request_id`; класс объявляется в shared kernel, а не импортируется из `py_main_lib.services.schemas.v1_schemas`, потому что право править `py-main-lib` не решено (OQ-69), а в конверт нужен `request_id` (ADR-010: ID запроса возвращается клиенту). Массивы `INFO` и `WARNING` сохранены ради совместимости формы, но монолит их не заполняет. Форма `SuccessfulResponseV1` boilerplate (`messages` + `payload`) для успешных ответов **не используется**: тело успешного ответа — сам ресурс (SYS-03-R10).
+- **Обоснование**: CLAUDE.md «Backend-сервис (boilerplate)»: ошибки в едином конверте `ErrorResponseV1`; `src/backend/py-monolyth/app/api/exception_handlers.py` (функция `error_envelope`, обработчики доменных ошибок, 422 и `HTTPException`) и `app/core/middlewares/logging_middleware.py` (500 в том же конверте). Поля `message_mnemo_code` и `parameters` boilerplate (`app/core/schemas.py`) переименованы в `code` и `details`, добавлены `message` и `request_id`; класс объявляется в shared kernel, а не импортируется из `py_main_lib.services.schemas.v1_schemas`, потому что конверт содержит `request_id` и коды ошибок FLT и принадлежит монолиту, а не общей библиотеке (OQ-69 resolved: `py-main-lib` правится свободно, неиспользуемые схемы ответов из неё удаляются на этапе 1 Г.1); в конверт нужен `request_id` (ADR-010: ID запроса возвращается клиенту). Массивы `INFO` и `WARNING` сохранены ради совместимости формы, но монолит их не заполняет. Форма `SuccessfulResponseV1` boilerplate (`messages` + `payload`) для успешных ответов **не используется**: тело успешного ответа — сам ресурс (SYS-03-R10).
 - **Проверка**: контрактный тест `tests/core/http/test_error_envelope.py`: для каждого зарегистрированного обработчика исключений и для 404 несуществующего маршрута, 405, 422, 500 (тестовый роут, бросающий исключение) ответ валидируется схемой `ErrorResponseV1`; правило Spectral `flt-error-responses-use-envelope` — каждый ответ `4XX`/`5XX`/`default` в контракте ссылается на `#/components/schemas/ErrorResponseV1`; архитектурный тест `test_no_raw_json_error_responses` (AST: в `app/modules/**` нет `JSONResponse(status_code=4..|5..)` и `HTTPException(` вне shared kernel).
 - **Применимость**: backend, tests, CI.
 
@@ -147,7 +147,7 @@
 
 - **Формулировка**: пагинация по `offset` (`offset`, `limit`, ответ `{"items": [...], "total": <int>, "offset": <int>, "limit": <int>}`) должна использоваться только для списков, доступных исключительно роли `platform_admin` (ADM-01–ADM-06), и помечаться в контракте расширением `x-flt-pagination: offset`; у остальных операций `offset` запрещён.
 - **Обоснование**: административные экраны (пользователи, курсы, жалобы) требуют перехода на произвольную страницу и общего количества при объёмах до десятков тысяч строк (OQ-13: 10 000 пользователей за год), где `OFFSET` и `COUNT(*)` дёшевы; для пользовательских списков действует SYS-03-R12.
-- **Проверка**: правило Spectral `flt-offset-only-admin` (операция с `x-flt-pagination: offset` имеет `security` только с permissions, начинающимися с префикса администратора платформы из SYS-06, и тег модуля); контрактный тест SYS-03-R23 сверяет расширение с реализацией (`paginate_offset()` допускается только в контроллерах с зависимостью `auth_user(<admin permission>)` — AST-тест `test_offset_pagination_admin_only`).
+- **Проверка**: правило Spectral `flt-offset-only-admin` (операция с `x-flt-pagination: offset` имеет `security` только с правами, которые по матрице SYS-06 выданы лишь роли `platform_admin` (код `<module>:<resource>:<action>`, область `any`), и тег модуля); контрактный тест SYS-03-R23 сверяет расширение с реализацией (`paginate_offset()` допускается только в контроллерах с зависимостью `auth_user(<admin permission>)` — AST-тест `test_offset_pagination_admin_only`).
 - **Применимость**: backend, CI.
 
 ### SYS-03-R14 Сортировка
@@ -175,21 +175,21 @@
 
 - **Формулировка**: тело `PUT` и `PATCH` для сущности с `version` должно содержать обязательное поле `version` с последним известным клиенту значением; сервер должен выполнять обновление с условием `version = :version`, при несовпадении отвечать `409 core.version_conflict` с `details: {"current_version": <int>}`, при успехе — увеличивать `version` на 1 и возвращать ресурс; заголовки `ETag`, `If-Match` и код `412` для этой цели не используются.
 - **Обоснование**: ADR-003, раздел 2.4 (`VersionMixin`, `StaleDataError` → HTTP 409 в конверте; «`version` обязателен в `PUT`/`PATCH`, frontend передаёт его»); поле в теле попадает в сгенерированные типы orval автоматически, в отличие от условных заголовков, и одинаково работает в браузере и в мобильном клиенте; выбор между 409 и 412 (вопрос оркестратора) решён в пользу 409, уже зафиксированного ADR-003.
-- **Проверка**: правило Spectral `flt-version-in-update-body` (у операций `put`/`patch` по пути с параметром `_id` схема `requestBody` содержит `required: [version]` или помечена `x-flt-no-version: true` с обоснованием в ТЗ); интеграционный тест shared kernel `tests/core/dao/test_optimistic_locking.py` и тест на N инстансах `tests/n_instances/test_concurrent_update.py` (два `PATCH` через HAProxy на разные инстансы: один `200`, второй `409`, данные не потеряны — SYS-05).
+- **Проверка**: правило Spectral `flt-version-in-update-body` (у операций `put`/`patch` по пути с параметром `_id` схема `requestBody` содержит `required: [version]` или помечена `x-flt-no-version: true` с обоснованием в ТЗ); интеграционный тест shared kernel `tests/core/dao/test_optimistic_locking.py` и тест на N инстансах `tests/n_instances/core/test_concurrent_update.py` (два `PATCH` через HAProxy на разные инстансы: один `200`, второй `409`, данные не потеряны — SYS-05).
 - **Применимость**: backend, frontend, tests.
 
 ### SYS-03-R18 Идемпотентность `POST` через `Idempotency-Key`
 
-- **Формулировка**: операция `POST`, которая создаёт ресурс (`201`), запускает фоновое задание (`202`) или вызывает внешний эффект (отправка письма, запрос к провайдеру LLM или речи), должна объявлять в контракте обязательный заголовок `Idempotency-Key` (UUID) и обрабатываться зависимостью `Idempotent()` shared kernel: первый запрос выполняется и его ответ (статус, заголовки `Location` и `Content-Type`, тело) сохраняется в Redis по ключу `shared_kernel:idempotency:<subject>:<key>` с TTL 24 часа, где `<subject>` — `user_id`, а для анонима — идентификатор анонимной сессии; повтор с тем же ключом и тем же телом (сравнение по `sha256` канонического JSON) возвращает сохранённый ответ с заголовком `Idempotent-Replayed: true`; тот же ключ с другим телом — `422 core.idempotency_key_reused`; повтор во время выполнения первого — `409 core.request_in_progress` с `Retry-After: 1`; `POST` входа, обновления токена и выхода (`/api/v1/auth/login`, `/refresh`, `/logout`) ключ не требуют.
+- **Формулировка**: операция `POST`, которая создаёт ресурс (`201`), запускает фоновое задание (`202`) или вызывает внешний эффект (отправка письма, запрос к провайдеру LLM или речи), должна объявлять в контракте обязательный заголовок `Idempotency-Key` (UUID) и обрабатываться зависимостью `Idempotent()` shared kernel: первый запрос выполняется и его ответ (статус, заголовки `Location` и `Content-Type`, тело) сохраняется в Redis по ключу `shared_kernel:idempotency:<subject>:<key>` с TTL 24 часа, где `<subject>` — `user_id`, а для анонима — идентификатор анонимной сессии из cookie `flt_anon_session` (OQ-77); повтор с тем же ключом и тем же телом (сравнение по `sha256` канонического JSON) возвращает сохранённый ответ с заголовком `Idempotent-Replayed: true`; тот же ключ с другим телом — `422 core.idempotency_key_reused`; повтор во время выполнения первого — `409 core.request_in_progress` с `Retry-After: 1`; `POST` входа, обновления токена и выхода (`/api/v1/auth/login`, `/refresh`, `/logout`) ключ не требуют.
 - **Обоснование**: ADR-012, раздел 3.5 (HAProxy повторяет только запросы без отправленного тела; идемпотентность — зона SYS-03); клиент (ADR-005) и мобильные приложения повторяют запросы при обрыве сети; уникальные ограничения PostgreSQL защищают не всякое создание (несколько одинаковых записей или заданий допустимы по домену). Потеря Redis допустима (ADR-003: политика fail-open для кэша): повтор без сохранённого ответа выполняется заново — ТЗ фичи с внешним эффектом указывает это в разделе 6.5.
-- **Проверка**: правило Spectral `flt-post-idempotency-key` (операция `post` с ответом `201` или `202` или с расширением `x-flt-side-effect: true` объявляет параметр `Idempotency-Key` `in: header, required: true, schema.format: uuid`; исключения — `x-flt-idempotency-exempt: true` с перечнем в разделе 6); интеграционный тест shared kernel `tests/core/http/test_idempotency.py`; тест на N инстансах `tests/n_instances/test_idempotency_across_instances.py` (два одинаковых `POST` на разные инстансы → один ресурс).
+- **Проверка**: правило Spectral `flt-post-idempotency-key` (операция `post` с ответом `201` или `202` или с расширением `x-flt-side-effect: true` объявляет параметр `Idempotency-Key` `in: header, required: true, schema.format: uuid`; исключения — `x-flt-idempotency-exempt: true` с перечнем в разделе 6); интеграционный тест shared kernel `tests/core/http/test_idempotency.py`; тест на N инстансах `tests/n_instances/core/test_idempotency_across_instances.py` (два одинаковых `POST` на разные инстансы → один ресурс).
 - **Применимость**: backend, tests, CI.
 
 ### SYS-03-R19 Лимиты запросов — 429 с `Retry-After`
 
 - **Формулировка**: при превышении лимита монолит должен отвечать `429` с `code: core.rate_limited`, заголовком `Retry-After: <секунды>` (целое, округлённое вверх) и `details: {"scope": "<имя лимита>", "retry_after_seconds": <int>}`; лимиты реализуются ограничителем shared kernel (скользящее окно в Redis, ADR-003) с ключами `<module>:ratelimit:<scope>:<subject>`; значения лимитов — параметры конфигурации модуля; ответы `429` и `413` самого HAProxy (первый рубеж, ADR-012) приходят без конверта, и клиент обязан обрабатывать `429`/`413`/`502`/`503`/`504` с телом, не являющимся JSON.
 - **Обоснование**: ADR-003, раздел 2.7 (Lua-ограничитель возвращает `retry_after_ms`); ADR-012 (stick-table HAProxy — первый рубеж без конверта); ADR-006 (лимит попыток входа 10 на email и 50 на IP); OQ-09 и OQ-10 (лимиты быстрого теста).
-- **Проверка**: интеграционный тест shared kernel `tests/core/http/test_rate_limit_response.py`; тест на N инстансах `tests/n_instances/test_rate_limit_global.py` (лимит `N` запросов исчерпывается запросами через HAProxy на разные инстансы — SYS-05); тест клиента фронтенда `src/lib/api-client.test.ts` на не-JSON ответ `429` (ADR-005).
+- **Проверка**: интеграционный тест shared kernel `tests/core/http/test_rate_limit_response.py`; тест на N инстансах `tests/n_instances/core/test_rate_limit_global.py` (лимит `N` запросов исчерпывается запросами через HAProxy на разные инстансы — SYS-05); тест клиента фронтенда `src/lib/api-client.test.ts` на не-JSON ответ `429` (ADR-005).
 - **Применимость**: backend, frontend, tests.
 
 ### SYS-03-R20 Заголовок `X-Request-ID`
@@ -264,9 +264,9 @@
 
 ### SYS-03-R30 Локаль запроса
 
-- **Формулировка**: монолит должен определять локаль запроса в порядке: язык интерфейса из профиля аутентифицированного пользователя (`users.ui_language`, ADR-006) → заголовок `Accept-Language` (разбор по RFC 9110, выбор первого поддерживаемого языка из `ru`, `en`, `ar`) → язык по умолчанию из SYS-07; выбранная локаль возвращается в заголовке `Content-Language`, доступна обработчикам через `RequestContext.locale` и используется только для локализуемого содержимого ответа (тексты CMS, названия из справочников, письма), а не для сообщений об ошибках: поле `message` конверта всегда на английском, фронтенд локализует по `code` и `details`.
-- **Обоснование**: CLAUDE.md «i18n с первого дня» (язык интерфейса — настройка, строки UI не хардкодятся); SYS-07 детализирует языки, направление письма и форматы; приоритет профиля над заголовком нужен, потому что язык браузера и выбранный язык интерфейса различаются (OQ-25 решается в SYS-07, здесь — только порядок источников для REST).
-- **Проверка**: тест `tests/core/http/test_locale_resolution.py` (три источника, `Content-Language`, недопустимый `Accept-Language` → язык по умолчанию); правило Spectral `flt-error-message-not-localized` отсутствует (не выразимо) — ревью: в ТЗ раздел 8.2 перечисляет ключи i18n для кодов ошибок.
+- **Формулировка**: монолит должен определять локаль запроса в порядке: язык интерфейса из профиля аутентифицированного пользователя (`identity.users.ui_language`, ADR-006) → cookie `flt_ui_language` (явный выбор языка до входа или анонимом, SYS-07) → заголовок `Accept-Language` (разбор по RFC 9110, выбор первого поддерживаемого языка из `ru`, `en`, `ar`) → `ru` (язык по умолчанию, SYS-07); значение не из множества `ru`, `en`, `ar` в профиле или cookie пропускается; выбранная локаль возвращается в заголовке `Content-Language`, доступна обработчикам через `RequestContext.locale` и используется только для локализуемого содержимого ответа (тексты CMS, названия из справочников, письма), а не для сообщений об ошибках: поле `message` конверта всегда на английском, фронтенд локализует по `code` и `details`.
+- **Обоснование**: CLAUDE.md «i18n с первого дня» (язык интерфейса — настройка, строки UI не хардкодятся); SYS-07 детализирует языки, направление письма и форматы; приоритет профиля над заголовком нужен, потому что язык браузера и выбранный язык интерфейса различаются (OQ-25: язык по умолчанию `ru` и порядок источников — SYS-07, здесь тот же порядок для REST).
+- **Проверка**: тест `tests/core/http/test_locale_resolution.py` (четыре источника в порядке приоритета, `Content-Language`, недопустимое значение cookie и `Accept-Language` → `ru`); правило Spectral `flt-error-message-not-localized` отсутствует (не выразимо) — ревью: в ТЗ раздел 8.2 перечисляет ключи i18n для кодов ошибок.
 - **Применимость**: backend, frontend, tests.
 
 ### SYS-03-R31 Схемы DTO модуля и их размещение
@@ -285,7 +285,7 @@
 | все | Роутер `APIRouter(prefix="/api/v1/<module-kebab>", tags=["<module>"])`; `operationId` по SYS-03-R24; схемы с префиксом модуля (SYS-03-R11); ошибки — подклассы `DomainError` с `code` `<module>.<name>` в `public/errors.py`; списки — `paginate_keyset()` shared kernel; `version` в `PUT`/`PATCH`; `Idempotency-Key` у создающих `POST`; контракт `Analytics/Specs/<module>/api/openapi.yaml` и тест `tests/contracts/test_openapi_<module>.py`; модули с заданиями — ресурс `/jobs/{job_id}` |
 | shared kernel (`app/core/http`) | `schemas.py` (`ErrorResponseV1`, `ErrorMessage`, `CorePage`, `CoreOffsetPage`, `CoreJobAcceptedResponse`), `errors.py` (`DomainError`, коды `core.*`), `exception_handlers.py` (перенос из `app/api`, `error_envelope`), middleware `request_id`, `body_limit`, `locale`, `deprecation`; зависимости `Idempotent()`, `paginate_keyset()`, `paginate_offset()`, `parse_sort()`; хелпер фильтрации по диапазонам |
 | identity | Дополнительный префикс `/api/v1/auth` (раздел 6); коды `identity.invalid_credentials`, `identity.refresh_reused`, `identity.csrf_invalid`, `identity.user_blocked`, `identity.account_exists_use_password`, `identity.external_account_taken`, `identity.login_rate_limited` (ADR-006); операции OAuth с редиректом (раздел 6); `GET /api/v1/auth/.well-known/jwks.json` (раздел 6) |
-| llm_gateway | `POST /api/v1/llm-gateway/provider-connections/{provider_connection_id}/test` — единственный синхронный внешний вызов по REST (раздел 6; SYS-08) |
+| llm_gateway | `POST /api/v1/llm-gateway/provider-bindings/{provider_binding_id}/test` — единственный синхронный внешний вызов по REST (раздел 6; SYS-08) |
 | local_runtime | `POST /api/v1/local-runtime/pairings` и `…/pairings/{pairing_id}/token` — анонимные операции с лимитом (ADR-008); прочее по общим правилам |
 | frontend (app_shell, shared) | orval генерирует клиент из контрактов; интерсептор axios: `X-CSRF-Token`, повтор после `401` через `refresh`, обработка не-JSON `429`/`413`/`503`, предупреждение по `Deprecation`; zod-схемы ответов терпимы к новым полям и значениям перечислений (SYS-03-R29) |
 | `src/tools/contracts` | `.spectral.yaml` с правилами `flt-*` из этой спецификации поверх `spectral:oas`; `flt-tools contracts check` (Spectral + `oasdiff breaking`) |
@@ -552,7 +552,7 @@ class InvalidCredentialsError(DomainError):
 | SYS-03-R4 | `GET /api/v1/auth/.well-known/jwks.json` | путь задан RFC 8615 и ADR-006 (раздел 3.3); сегмент содержит `.` | бессрочно | ADR-006, пользователь, 2026-10-10 |
 | SYS-03-R6, R21, R26 | `GET /api/v1/auth/{provider}/start`, `GET /api/v1/auth/{provider}/callback` | OAuth redirect-flow по ADR-006: ответ `302` и cookie `flt_oauth`, тело не JSON | бессрочно | ADR-006, пользователь, 2026-10-10 |
 | SYS-03-R18 | `POST /api/v1/auth/login`, `/refresh`, `/logout`, `/logout-all`, `POST /api/v1/local-runtime/pairings/{pairing_id}/token` (`x-flt-idempotency-exempt: true`) | идемпотентны по природе или защищены ротацией (ADR-006, раздел 3.2); опрос токена сопряжения повторяется по протоколу (ADR-008) | бессрочно | ADR-006, ADR-008, пользователь, 2026-10-10 |
-| SYS-03-R27 | `POST /api/v1/llm-gateway/provider-connections/{provider_connection_id}/test`, `POST /api/v1/speech/provider-connections/{provider_connection_id}/test` | проверка подключения требует одного синхронного вызова провайдера с таймаутом 10 с (SYS-08); результат нужен пользователю сразу | бессрочно | предлагается SYS-08, утверждается на G1 SYS-03 и SYS-08 |
+| SYS-03-R27 | `POST /api/v1/llm-gateway/provider-bindings/{provider_binding_id}/test`, `POST /api/v1/speech/provider-bindings/{provider_binding_id}/test` | проверка подключения требует одного синхронного вызова провайдера с таймаутом 10 с (SYS-08); результат нужен пользователю сразу | бессрочно | предлагается SYS-08, утверждается на G1 SYS-03 и SYS-08 |
 | SYS-03-R21 (анонимный доступ) | операции с `x-flt-public: true`: `/api/v1/auth/register`, `/login`, `/password/forgot`, `/{provider}/start`, `/.well-known/jwks.json`, `/me/auth-providers`, `/api/v1/local-runtime/pairings`, каталог курсов `GET /api/v1/courses/catalog`, CMS-страницы `GET /api/v1/cms/pages/{slug}`, быстрый тест `/api/v1/assessment/quick-test/*` | публичные сценарии посетителя портала (VIS-01–VIS-05) и сопряжение агента (ADR-008); матрица — SYS-06 | бессрочно | SYS-06 на G1; перечень дополняется ТЗ этапа 2 |
 
 Исключений из SYS-03-R26 (`multipart/form-data`) на этапе 1 нет: загрузки идут через presigned URL (ADR-007).
@@ -565,7 +565,7 @@ class InvalidCredentialsError(DomainError):
 - Хранение состояния, TTL ключей Redis, поведение при отказе Redis, методика тестов на N инстансах — SYS-05.
 - Коды ошибок провайдеров LLM и речи, их отображение в `completion.error` — SYS-08.
 - Нефункциональные нормативы (p95, лимиты HAProxy, заголовки безопасности, TLS) — SYS-02 и ADR-012.
-- Структура и запуск CI job `contracts`, размещение `src/tools/contracts` (OQ-70) — SYS-12 и ADR-011.
+- Структура и запуск CI job `contracts`, размещение `src/tools/contracts` (OQ-70, resolved) — SYS-12 и ADR-011.
 - Генерация клиента, zod-схем и моков MSW из контракта — ADR-005 и спецификация `app_shell`.
 - Доступ к файлам (presigned URL, бакеты, подтверждение загрузки) — ADR-007.
 - HTTP-кэширование (`ETag`, `Cache-Control`, `If-None-Match`) для ответов API не вводится на этапах 1–3; при появлении потребности — изменение SYS-03 (статус `changed`).
@@ -593,12 +593,15 @@ class InvalidCredentialsError(DomainError):
 | Вопрос | Суть | Блокирует G1 | Статус |
 |---|---|---|---|
 | [OQ-12](../../open-questions.md) | путь `/api/v1/auth/<provider>/callback` для OAuth — основание исключения SYS-03-R2 | нет | resolved: redirect URI `/api/v1/auth/<provider>/callback` |
-| [OQ-25](../../open-questions.md) | язык интерфейса по умолчанию — третий источник в SYS-03-R30 | нет | planned → SYS-07 |
-| [OQ-69](../../open-questions.md) | право править `py-main-lib`: `ErrorResponseV1` объявляется в shared kernel, зависимость от `py_main_lib.services.schemas.v1_schemas` снимается | нет | open |
-| [OQ-70](../../open-questions.md) | расположение правил Spectral (`src/tools/contracts/.spectral.yaml` или `.github/scripts/`) — влияет только на путь в разделе «Проверка» | нет | open |
+| [OQ-25](../../open-questions.md) | язык интерфейса по умолчанию — последний источник в SYS-03-R30 | нет | planned → SYS-07 (черновик: `ru`) |
+| [OQ-69](../../open-questions.md) | право править `py-main-lib`: `ErrorResponseV1` объявляется в shared kernel, зависимость от `py_main_lib.services.schemas.v1_schemas` снимается | нет | resolved: библиотека правится свободно |
+| [OQ-70](../../open-questions.md) | расположение правил Spectral — влияет только на путь в разделе «Проверка» | нет | resolved: `src/tools/contracts/.spectral.yaml` |
+| [OQ-77](../../open-questions.md) | анонимная сессия быстрого теста, cookie `flt_anon_session` — субъект `Idempotency-Key` и лимитов анонима (SYS-03-R18) | нет | open (рабочее решение принято) |
 
 ## 10. История изменений
 
 | Версия | Дата | Автор | Что изменилось | Статус |
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
+| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R1 обоснование — пример ADR-004 исправлен в 1.1; R7 обоснование — OQ-69 resolved; R18 субъект анонима — cookie `flt_anon_session` (OQ-77); R13 проверка — права администратора в формате SYS-06; R19 путь теста N3 `tests/n_instances/core/`; R30 порядок локали: профиль → cookie `flt_ui_language` → `Accept-Language` → `ru`; раздел 9 — статусы OQ-25, OQ-69, OQ-70, добавлен OQ-77; `provider-connections` → `provider-bindings` в таблице исключений (термин SYS-08, ADR-009); пути тестов N3 R17, R18 — `tests/n_instances/core/` | draft |
+| 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |

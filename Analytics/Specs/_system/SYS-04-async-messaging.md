@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | draft |
-| Версия | 0.1 |
-| Дата | 2026-10-10 |
+| Статус | approved |
+| Версия | 1.0 |
+| Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-11 (PR #3) |
 | Пункт(ы) BRD | все |
 | Модуль | все backend-модули, shared kernel (`app/core/ws`, `app/core/kafka`), frontend (`src/lib/ws`), `src/protocol` (локальный агент), `src/tools/contracts` |
 | Зависимости | ADR-002, ADR-003, ADR-004, ADR-006, ADR-008, ADR-009, ADR-010, ADR-012 |
@@ -32,7 +32,7 @@
 | Канал WebSocket (`channel`) | Именованный поток событий `<module>.<channel>[:<id>]`, на который клиент подписывается и который принадлежит модулю (SYS-04-R5) |
 | Обработчик канала (`WsChannelHandler`) | Объект модуля, зарегистрированный в shared kernel: проверяет право подписки и обрабатывает входящие команды своих типов (SYS-04-R6) |
 | Команда задания (`job command`) | Сообщение Kafka в топике `flt.<module>.jobs.<job>.v<N>`, которым роль `api` поручает роли `worker` выполнить фоновое задание (SYS-04-R29) |
-| Декларация топика (`TopicDeclaration`) | Описание топика в `public/topics.py` модуля: имя, число партиций, retention, схема сообщения, по которому роль `migrate` создаёт топик, а консьюмеры подписываются (SYS-04-R21) |
+| Декларация топика (`TopicDeclaration`) | Описание топика в `public/topics.py` модуля: имя, вид (`event` или `job`), видимость (`visibility`: `public` или `internal`), число партиций, retention, схема сообщения, по которому роль `migrate` создаёт топик, а консьюмеры подписываются (SYS-04-R21) |
 | Общие схемы AsyncAPI (`asyncapi-common.yaml`) | Файл `Analytics/Specs/_system/asyncapi-common.yaml` со схемами `WsEnvelope`, `EventEnvelope`, типов shared kernel и серверов, на который ссылаются контракты модулей (SYS-04-R33) |
 
 ## 3. Требования
@@ -50,7 +50,7 @@
 
 - **Формулировка**: соединение `/ws` должно аутентифицироваться один раз при HTTP-handshake по правилам ADR-006, раздел 3.4: заголовок `Authorization: Bearer <access JWT>` либо cookie `__Host-flt_access` с проверкой заголовка `Origin` против `APP_PUBLIC_URL`; анонимное соединение допускается только с cookie анонимной сессии быстрого теста (имя и выдача — ТЗ VIS-03, права — SYS-06); токен в query-string запрещён; при неуспехе сервер принимает соединение и немедленно закрывает его кодом `4401` с причиной `unauthenticated`, не отправляя сообщений; идентичность соединения (`user_id`, `sid`, роли, permissions) фиксируется на всё время жизни, истечение access-токена соединение не разрывает, отзыв сессии — событием по каналу пользователя (SYS-04-R13) с закрытием `4401` и причиной `session_revoked`; соединение `/ws/agent` аутентифицируется токеном `flta_…` обработчиком модуля `local_runtime` (SYS-04-R17).
 - **Обоснование**: ADR-006, разделы 2.4 (аутентификация WebSocket — cookie или Bearer при handshake, токен в query отвергнут) и 3.7; ADR-004 (код 4401; первое сообщение `auth` не нужно, поскольку все клиенты FLT передают cookie или заголовок — поэтому тип `auth` из перечня ADR-004 не вводится, а правило «5 с на аутентификацию» заменяется проверкой при handshake). Закрытие после `accept` вместо HTTP 403 нужно, чтобы браузерный клиент получил код `4401` и запустил `refresh` (ADR-005).
-- **Проверка**: интеграционные тесты `tests/core/ws/test_handshake_auth.py` (Bearer — успех; cookie без `Origin` или с чужим `Origin` — 4401; cookie с валидным `Origin` — успех; токен в query — 4401; `flta_`-токен на `/ws` — 4401); тест на N инстансах `tests/n_instances/test_ws_session_revoke.py` (вход на A, соединение к B, `logout-all` на C → B закрывает соединение 4401 — ADR-006, раздел 3.9).
+- **Проверка**: интеграционные тесты `tests/core/ws/test_handshake_auth.py` (Bearer — успех; cookie без `Origin` или с чужим `Origin` — 4401; cookie с валидным `Origin` — успех; токен в query — 4401; `flta_`-токен на `/ws` — 4401); тест на N инстансах `tests/n_instances/core/test_ws_session_revoke.py` (вход на A, соединение к B, `logout-all` на C → B закрывает соединение 4401 — ADR-006, раздел 3.9).
 - **Применимость**: backend, frontend, tests.
 
 ### SYS-04-R3 Конверт текстового сообщения
@@ -140,14 +140,14 @@
 
 - **Формулировка**: публикация события в канал с любого инстанса и любой роли должна выполняться только через `WsPublisher` shared kernel: `publish(channel, type, payload, *, correlation_id)` → `PUBLISH ws:channel:<channel> <JSON без seq>`; адресные события пользователя — `publish_to_user(user_id, type, payload, *, correlation_id)` → `PUBLISH ws:user:<user_id> …` (доставляются во все соединения пользователя без подписки, `channel: null`); инстанс держит таблицу «канал → локальные соединения», выполняет `SUBSCRIBE ws:channel:<channel>` при первой локальной подписке и `UNSUBSCRIBE` при последней, `SUBSCRIBE ws:user:<user_id>` — при первом соединении пользователя; для pub/sub используется отдельное соединение `PubSub`, не из общего пула; `seq` присваивает инстанс-держатель соединения при отправке; размер сообщения pub/sub — не более 64 КиБ; через pub/sub не передаются токены ответа LLM (только события прогресса, завершения и ошибки — ADR-009, раздел 3.2); каналы `ws:*` принадлежат shared kernel, каналы запрос–ответ `<module>:...:inbox` и `<module>:reply:<request_id>` — модулю-владельцу (ADR-008); при недоступности Redis публикация регистрируется в метрике `flt_ws_publish_failed_total` и логе, соединения не рвутся (ADR-003, таблица отказа Redis).
 - **Обоснование**: CLAUDE.md «Масштабирование и состояние» (событие доставляется клиенту, к какому бы инстансу он ни был подключён); ADR-004, раздел 3.3; ADR-003, правило 6; ADR-009 (токены не через pub/sub).
-- **Проверка**: тест на N инстансах `tests/n_instances/test_ws_cross_instance.py` (подписка на инстансе A, публикация с инстанса B и из роли `worker`, доставка на A с корректным `seq`; `publish_to_user` доходит до двух соединений на разных инстансах); архитектурный тест `test_no_direct_redis_publish` (контракт import-linter 5 ADR-002 плюс AST: `PUBLISH` только в `app/core`); тест отключения Redis `tests/core/ws/test_publish_without_redis.py`.
+- **Проверка**: тест на N инстансах `tests/n_instances/core/test_ws_cross_instance.py` (подписка на инстансе A, публикация с инстанса B и из роли `worker`, доставка на A с корректным `seq`; `publish_to_user` доходит до двух соединений на разных инстансах); архитектурный тест `test_no_direct_redis_publish` (контракт import-linter 5 ADR-002 плюс AST: `PUBLISH` только в `app/core`); тест отключения Redis `tests/core/ws/test_publish_without_redis.py`.
 - **Применимость**: backend, tests.
 
 ### SYS-04-R14 Лимиты соединений, подписок и сообщений
 
 - **Формулировка**: shared kernel должен применять лимиты: соединений на пользователя — `WS_MAX_CONNECTIONS_PER_USER=5` (счётчик `shared_kernel:ws:conns:<user_id>` в Redis, TTL 60 с с продлением heartbeat-ом; превышение — `4429`); подписок на соединение — `WS_MAX_SUBSCRIPTIONS_PER_CONNECTION=50` (`ws.subscription_limit`); входящих сообщений — `WS_MAX_INBOUND_PER_SECOND=20` на соединение (превышение → `ws.error` с кодом `ws.rate_limited` и `retry_after_ms`, третье превышение за минуту → `1008`); бинарных кадров — `WS_MAX_INBOUND_FRAMES_PER_SECOND=100` на соединение (аудио 20 мс = 50 кадров/с); исходящей очереди — `WS_OUTBOX_MAX=1000` сообщений (`1013`); одновременных стримов LLM на соединение — `LLM_MAX_CONCURRENT_STREAMS_PER_CONNECTION=3` (SYS-08); анонимные соединения быстрого теста — `WS_MAX_ANONYMOUS_CONNECTIONS_PER_IP=3`; все значения — параметры конфигурации shared kernel, одинаковые в docker-compose и Helm.
 - **Обоснование**: ADR-004 (лимит 5 соединений, ключ `shared_kernel:ws:conns`); ADR-009 (`WS_OUTBOX_MAX`, 3 стрима на соединение); OQ-13 (300 соединений, 50 стримов); лимит входящих защищает инстанс от злоупотребления без HAProxy-уровня (ADR-012: stick-table не видит сообщения внутри туннеля).
-- **Проверка**: тесты `tests/core/ws/test_limits.py`; тест на N инстансах `tests/n_instances/test_ws_connection_limit.py` (шесть соединений через HAProxy на разные инстансы → одно закрыто `4429`; лимит глобальный — SYS-05).
+- **Проверка**: тесты `tests/core/ws/test_limits.py`; тест на N инстансах `tests/n_instances/core/test_ws_connection_limit.py` (шесть соединений через HAProxy на разные инстансы → одно закрыто `4429`; лимит глобальный — SYS-05).
 - **Применимость**: backend, deploy, tests.
 
 ### SYS-04-R15 Корреляция и логи WebSocket
@@ -196,9 +196,9 @@
 
 ### SYS-04-R21 Декларации топиков
 
-- **Формулировка**: каждый топик модуля должен быть объявлен в `app/modules/<module>/public/topics.py` объектом `TopicDeclaration(name, kind="event" | "job", partitions, retention, message_model, description)` и собран в кортеж `TOPICS`; значения по умолчанию: `partitions=6`, `retention=timedelta(days=7)` для событий и команд, DLQ создаётся автоматически с `retention=timedelta(days=30)`; `brokers/topics.py` как отдельный `StrEnum` не ведётся — имена берутся из деклараций; консьюмер другого модуля импортирует декларацию из `public` модуля-владельца.
-- **Обоснование**: ADR-004 (топики создаются ролью `migrate` по декларациям модулей — `topics.py` в публичном API; retention событий 7 суток, DLQ 30 суток, 6 партиций); ADR-002 помещает `topics.py` в `brokers/` — внутренний слой, из которого другие модули импортировать не могут; поскольку подписка чужого модуля требует имени топика, декларация должна быть публичной; SYS-04 уточняет ADR-002 в этой части.
-- **Проверка**: архитектурный тест `test_topic_declarations.py` (наличие `public/topics.py` у каждого модуля с `kafka_router` или `OutboxPublisher`; у каждого консьюмера модуля топик найден в декларациях модуля-владельца); скаффолдер `make scaffold-subscriber` создаёт декларацию.
+- **Формулировка**: каждый топик модуля должен быть объявлен в `app/modules/<module>/public/topics.py` объектом `TopicDeclaration(name, kind="event" | "job", visibility="public" | "internal", partitions, retention, message_model, description)` и собран в кортеж `TOPICS`; `visibility="internal"` (значение по умолчанию) — топик читают только консьюмеры самого модуля; `visibility="public"` — топик могут читать консьюмеры других модулей, а с этапа 7 — плагины (SYS-09-R12), поэтому payload публичного события не содержит персональных данных сверх идентификаторов (SYS-02); `kind="job"` допускает только `internal`: команды заданий `flt.<module>.jobs.*` принимает только модуль-владелец; значения по умолчанию: `partitions=6`, `retention=timedelta(days=7)` для событий и команд, DLQ создаётся автоматически с `retention=timedelta(days=30)`; отдельный `StrEnum` имён топиков не ведётся — имена берутся из деклараций; консьюмер другого модуля импортирует декларацию из `public` модуля-владельца.
+- **Обоснование**: ADR-004 (топики создаются ролью `migrate` по декларациям модулей — `topics.py` в публичном API; retention событий 7 суток, DLQ 30 суток, 6 партиций); подписка чужого модуля требует имени топика, поэтому декларация публична: ADR-002 v1.1 перенёс `topics.py` из `brokers/` в `public/`; поле `visibility` отделяет события, на которые можно подписываться, от внутренних команд заданий (правило ADR-004: другой модуль меняет данные владельца только командой в его топик заданий, публикуя её через outbox владельца или через публичный `Protocol`).
+- **Проверка**: архитектурный тест `test_topic_declarations.py` (наличие `public/topics.py` у каждого модуля с `kafka_router` или `OutboxPublisher`; у каждого консьюмера модуля топик найден в декларациях модуля-владельца, а консьюмер чужого модуля подписан только на топик с `visibility="public"`; у `kind="job"` — только `visibility="internal"`); скаффолдер `make scaffold-subscriber` создаёт декларацию.
 - **Применимость**: backend, tests.
 
 ### SYS-04-R22 Заголовки и ключ сообщения
@@ -212,14 +212,14 @@
 
 - **Формулировка**: роль `migrate` должна создавать топики с параметрами: `partitions` из декларации (на стенде local допускается `KAFKA_AUTO_CREATE_TOPICS_ENABLE=true` с `num.partitions=1`); `replication.factor` — 1 в docker-compose (один брокер) и 3 в Kubernetes при трёх брокерах с `min.insync.replicas=2`; `retention.ms` из декларации; `cleanup.policy=delete`; для DLQ — `retention.ms` 30 суток; изменение `partitions` после создания выполняется только в сторону увеличения отдельной операцией `python -m app topics apply` роли `migrate` и фиксируется в ТЗ (порядок по агрегату для старых ключей при этом не гарантируется — ТЗ указывает, допустимо ли).
 - **Обоснование**: ADR-004, раздел 3.4; число брокеров и конфигурация compose и Helm — SYS-11; `min.insync.replicas=2` с `acks=all` (SYS-04-R24) даёт сохранность при потере одного брокера.
-- **Проверка**: интеграционный тест стенда N инстансов `tests/n_instances/test_topics_created.py` (после `migrate` все декларированные топики и их DLQ существуют с заявленными партициями и retention — через `AdminClient`); тест конфигурации SYS-11 на значения `replication.factor` по стендам.
+- **Проверка**: интеграционный тест стенда N инстансов `tests/n_instances/core/test_topics_created.py` (после `migrate` все декларированные топики и их DLQ существуют с заявленными партициями и retention — через `AdminClient`); тест конфигурации SYS-11 на значения `replication.factor` по стендам.
 - **Применимость**: backend, deploy, tests.
 
 ### SYS-04-R24 Transactional outbox
 
 - **Формулировка**: событие или команда должны записываться в таблицу `<module>.outbox` (DDL — пример 4) вызовом `await OutboxPublisher.publish(session, event)` shared kernel в той же сессии SQLAlchemy и транзакции, что и изменение данных; прямой `broker.publish` вне shared kernel запрещён; relay выполняется в роли `worker` — один активный на модуль под блокировкой `shared_kernel:lock:outbox:<module>` (TTL 30 с, продление heartbeat-ом каждые 10 с): выборка `SELECT … WHERE published_at IS NULL ORDER BY id LIMIT 100 FOR UPDATE SKIP LOCKED`, публикация с `acks=all`, `enable.idempotence=true`, затем `UPDATE published_at = now()`; при ошибке публикации — `attempts += 1`, `last_error`, повтор при следующем проходе; пауза при пустой выборке 200 мс с ростом до 2 с; строки с `published_at` старше 7 суток удаляет периодическая задача shared kernel (регистрируется от имени каждого модуля); без Redis relay не стартует (fail-closed, ADR-003).
 - **Обоснование**: CLAUDE.md «Взаимодействие» (события через outbox); ADR-004, раздел 2.3 A (один relay на модуль под блокировкой сохраняет порядок по агрегату; `SKIP LOCKED` страхует от двойной публикации при потере блокировки); ADR-003 (блокировки `SET NX PX` с токеном владельца).
-- **Проверка**: контракт import-linter 6 `kafka-publish-only-via-outbox` и AST-тест `test_no_direct_broker_publish` (ADR-002); интеграционные тесты `tests/core/kafka/test_outbox_relay.py` (атомарность с откатом транзакции, порядок по агрегату, повтор при ошибке брокера, уборка); тест на N инстансах `tests/n_instances/test_outbox_failover.py` (два воркера: один relay активен; остановка `flt-worker-2` → второй подхватывает за ≤ 30 с; каждое событие опубликовано ровно один раз по `event_id`).
+- **Проверка**: контракт import-linter 6 `kafka-publish-only-via-outbox` и AST-тест `test_no_direct_broker_publish` (ADR-002); интеграционные тесты `tests/core/kafka/test_outbox_relay.py` (атомарность с откатом транзакции, порядок по агрегату, повтор при ошибке брокера, уборка); тест на N инстансах `tests/n_instances/core/test_outbox_failover.py` (два воркера: один relay активен; остановка `flt-worker-2` → второй подхватывает за ≤ 30 с; каждое событие опубликовано ровно один раз по `event_id`).
 - **Применимость**: backend, tests.
 
 ### SYS-04-R25 Порядок событий агрегата
@@ -233,7 +233,7 @@
 
 - **Формулировка**: обработчик сообщения должен выполняться декоратором `@idempotent_consumer(consumer="<module>.<handler>")` shared kernel в одной транзакции модуля: `INSERT INTO <module>.processed_events (consumer, event_id, processed_at) ON CONFLICT DO NOTHING` → при конфликте сообщение пропускается с ack и метрикой `flt_kafka_duplicates_total{consumer}`; иначе — бизнес-изменение, собственные события в outbox, `COMMIT`, затем ack Kafka (`AckPolicy.REJECT_ON_ERROR`, ack после commit); обработчик не должен вызывать внешние сервисы с побочным эффектом до фиксации записи в `processed_events` без собственной идемпотентности (ключ запроса провайдеру — `event_id`); строки `processed_events` старше 30 суток удаляет периодическая задача.
 - **Обоснование**: CLAUDE.md «Взаимодействие» (консьюмеры идемпотентны); ADR-004, раздел 3.4 (таблица `processed_events`, ack после commit); at-least-once доставка Kafka и повтор при остановке воркера (SYS-04-R18).
-- **Проверка**: архитектурный тест `test_consumers_are_idempotent` (каждый `@subscriber` в `app/modules/**` обёрнут `@idempotent_consumer`); интеграционный тест `tests/core/kafka/test_inbox.py` (повторная доставка того же `event_id` не меняет данные и не публикует повторных событий); тест на N инстансах `tests/n_instances/test_job_runs_once.py` (команда задания при двух воркерах и принудительном повторе доставки выполняется один раз — SYS-05).
+- **Проверка**: архитектурный тест `test_consumers_are_idempotent` (каждый `@subscriber` в `app/modules/**` обёрнут `@idempotent_consumer`); интеграционный тест `tests/core/kafka/test_inbox.py` (повторная доставка того же `event_id` не меняет данные и не публикует повторных событий); тест на N инстансах `tests/n_instances/core/test_job_runs_once.py` (команда задания при двух воркерах и принудительном повторе доставки выполняется один раз — SYS-05).
 - **Применимость**: backend, tests.
 
 ### SYS-04-R27 Ретраи и dead letter topic
@@ -275,7 +275,7 @@
 
 - **Формулировка**: периодическая задача модуля должна объявляться в `app/modules/<module>/schedules.py` объектом `ScheduleDeclaration(name, cron, handler, lock_ttl)` и выполняться планировщиком роли `worker`: каждые 10 с проверяется расписание; задача запускается только после захвата блокировки `shared_kernel:lock:schedule:<module>.<name>` с TTL = интервалу задачи (не более 24 ч); отсутствие блокировки — пропуск без ошибки; журнал запусков — таблица `<module>.scheduled_runs` (`id`, `task`, `started_at`, `finished_at`, `status`, `error`); задача обязана быть идемпотентной и укладываться в `lock_ttl`, иначе — разбиение на задания (SYS-04-R29).
 - **Обоснование**: ADR-004, раздел 3.4 (планировщик под блокировкой, `schedules.py`, `scheduled_runs` в схеме модуля); CLAUDE.md «Масштабирование и состояние» (периодические задачи не выполняются на всех инстансах сразу).
-- **Проверка**: тест `tests/core/kafka/test_scheduler.py`; тест на N инстансах `tests/n_instances/test_schedule_runs_once.py` (задача с интервалом 1 мин при двух воркерах выполняется один раз — SYS-05).
+- **Проверка**: тест `tests/core/kafka/test_scheduler.py`; тест на N инстансах `tests/n_instances/core/test_schedule_runs_once.py` (задача с интервалом 1 мин при двух воркерах выполняется один раз — SYS-05).
 - **Применимость**: backend, tests.
 
 ### 3.3. Контракты и тесты
@@ -437,6 +437,7 @@ from app.modules.identity.public.events import UserRegistered
 USER_REGISTERED_V1 = TopicDeclaration(
     name="flt.identity.user_registered.v1",
     kind="event",
+    visibility="public",
     partitions=6,
     retention=timedelta(days=7),
     message_model=UserRegistered,
@@ -722,7 +723,6 @@ class CompletionStreamHandler(WsChannelHandler):
 | SYS-04-R3 (`channel`) | все сообщения `/ws/agent` — `channel: null` | у агента нет подписок: единственный адресат — платформа (ADR-008, раздел 3.5) | бессрочно | ADR-008, пользователь, 2026-10-10 |
 | SYS-04-R24 (публикация только через outbox) | тесты (`tests/**`), команда `dlq replay`, relay shared kernel | `TestKafkaBroker` и повтор из DLQ публикуют напрямую по природе; каталог `tests/` вне `root_packages` import-linter (ADR-002) | бессрочно | ADR-002 и ADR-004, пользователь, 2026-10-10 |
 | SYS-04-R13 (токены LLM не через pub/sub) | стрим локальной модели через агента: части `llm.chunk` идут через `local_runtime:reply:<request_id>` | ретрансляция между инстансами без связи инстанс–инстанс (ADR-009, вариант G; ADR-008, раздел 3.7); при потере — `agent_offline` и повтор | бессрочно | ADR-009, пользователь, 2026-10-10 |
-| SYS-04-R21 (`topics.py` в `public/`) | расхождение с ADR-002 (`brokers/topics.py`) | консьюмеры других модулей импортируют имя топика, что возможно только из `public` | до правки ADR-002 новым ADR или фиксации в SYS-01 | предлагается SYS-04; утверждается на G1 |
 
 ## 7. Вне рамок
 
@@ -733,7 +733,7 @@ class CompletionStreamHandler(WsChannelHandler):
 - Число брокеров, конфигурация Kafka, Redis Sentinel, значения grace-периодов в compose и Helm, runbook DLQ — SYS-11.
 - Методика тестов на N инстансах, фикстуры `TestKafkaBroker`, остановка инстанса в тестах — SYS-10 и SYS-05.
 - Генерация zod-схем и моков WebSocket на фронтенде — ADR-005 и спецификация `app_shell`.
-- Уведомления как доменная сущность (модуль-владелец — OQ-49, SYS-01); SYS-04 задаёт только канал доставки `publish_to_user`.
+- Уведомления как доменная сущность (модуль-владелец `notifications`, SYS-01, OQ-49); SYS-04 задаёт только канал доставки `publish_to_user`.
 - Видеосвязь групповых занятий (LiveKit, сигнализация `/livekit/*`) — ADR-015 и ТЗ TCH-08.
 - Трассировка OpenTelemetry (`traceparent` передаётся, экспорт выключен) — ADR-010.
 - Retry-топики с задержкой (вместо ретраев в процессе) не вводятся; при появлении потребности — изменение SYS-04.
@@ -761,13 +761,15 @@ class CompletionStreamHandler(WsChannelHandler):
 | Вопрос | Суть | Блокирует G1 | Статус |
 |---|---|---|---|
 | [OQ-24](../../open-questions.md) | именование топиков Kafka — зафиксировано в SYS-04-R19 (решает OQ-24) | да | planned → SYS-04; закрывается утверждением этой спецификации |
-| [OQ-17](../../open-questions.md) | роли запуска монолита (`api`, `worker`, `migrate`) — приняты в ADR-004, используются в SYS-04-R18, R24, R31 | нет | planned → ADR-004 (принят 2026-10-10); реестр обновляется оркестратором |
-| [OQ-49](../../open-questions.md) | модуль-владелец уведомлений — канал доставки задан (`publish_to_user`), владелец типов `notification.*` — SYS-01 | нет | planned → SYS-01 |
+| [OQ-17](../../open-questions.md) | роли запуска монолита (`api`, `worker`, `migrate`) — приняты в ADR-004, используются в SYS-04-R18, R24, R31 | нет | resolved (ADR-004) |
+| [OQ-49](../../open-questions.md) | модуль-владелец уведомлений — канал доставки задан (`publish_to_user`), владелец типов `notification.*` — модуль `notifications` (SYS-01) | нет | planned → SYS-01 (черновик: модуль `notifications`) |
 | [OQ-74](../../open-questions.md) | кодек голоса (PCM16 или Opus) — влияет на размер кадра, не на заголовок | нет | planned → ТЗ STU-28, STU-34.2 |
-| [OQ-70](../../open-questions.md) | расположение правил Spectral — путь в разделе «Проверка» | нет | open |
+| [OQ-70](../../open-questions.md) | расположение правил Spectral — путь в разделе «Проверка» | нет | resolved: `src/tools/contracts/.spectral.yaml` |
 
 ## 10. История изменений
 
 | Версия | Дата | Автор | Что изменилось | Статус |
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
+| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R21 — поле `visibility` (`internal` по умолчанию, `public` — для других модулей и плагинов, согласовано с SYS-09-R12) у `TopicDeclaration`, `topics.py` в `public/` по ADR-002 v1.1, исключение раздела 6 для R21 снято; пути тестов N3 — `tests/n_instances/core/`; уведомления — модуль `notifications`; раздел 9 — статусы OQ-17, OQ-49, OQ-70; пути тестов N3 R2, R24, R26 — `tests/n_instances/core/`; R21 — без упоминания `brokers/topics.py` | draft |
+| 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
