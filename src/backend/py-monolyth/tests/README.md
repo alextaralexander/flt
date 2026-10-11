@@ -1,7 +1,9 @@
 # Тесты
 
 Структура каталога зеркалит `app/`: тесты shared kernel — `tests/core/...`, тесты модулей —
-`tests/modules/<module>/...` (ADR-002), скаффолдер — `tests/cli/`, настройки — `tests/configs/`.
+`tests/modules/<module>/...` (ADR-002), скаффолдер — `tests/cli/`, настройки — `tests/configs/`,
+архитектурные тесты — `tests/architecture/` (границы модулей и хранение состояния: ADR-002 §3.6, SYS-05;
+без БД, входят в `make arch`; каждый тест несёт маркер `@pytest.mark.req("SYS-NN-R<M>")`, SYS-10-R8).
 
 ## Запуск
 

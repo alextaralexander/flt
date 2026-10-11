@@ -25,7 +25,7 @@
 | Формат / проверка формата | `make format` / `make format-check` |
 | Линт (ruff check) | `make lint` / `make lint-fix` |
 | Типы (mypy strict) | `make typecheck` |
-| Границы модулей (import-linter) | `make arch` |
+| Границы модулей (import-linter + `tests/architecture`) | `make arch` |
 | Security (bandit + detect-secrets) | `make security` |
 | **Полная проверка (DoD)** | **`make check`** = format → lint → typecheck → arch → security → test-cov |
 | Модуль / REST-сущность / Kafka-консьюмер | `make scaffold-module name=…`, `make scaffold-entity module=… name=…`, `make scaffold-subscriber module=… topic=… value=…` |

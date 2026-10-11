@@ -41,6 +41,8 @@ ASYNCAPI_PATH = "/asyncapi/kafka"
 OPENAPI_URL = "/api/openapi.json"
 DOCS_URL = "/api/docs"
 REDOC_URL = "/api/redoc"
+# Страница OAuth2-redirect Swagger UI — тоже под /api (по умолчанию FastAPI ставит /docs/oauth2-redirect).
+DOCS_OAUTH2_REDIRECT_URL = f"{DOCS_URL}/oauth2-redirect"
 
 
 @asynccontextmanager
@@ -89,6 +91,7 @@ def create_app(modules: Sequence[ModuleDefinition] | None = None, role: AppRole 
         openapi_url=OPENAPI_URL,
         docs_url=DOCS_URL,
         redoc_url=REDOC_URL,
+        swagger_ui_oauth2_redirect_url=DOCS_OAUTH2_REDIRECT_URL,
     )
     if resolved_role is AppRole.ALL:
         application.state.worker = create_worker_app(resolved_modules, manage_resources=False, role=resolved_role)

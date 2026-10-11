@@ -60,7 +60,7 @@ lint-fix: ## Линт с автоисправлениями
 typecheck: ## Проверка типов (mypy strict)
 	$(RUN) mypy app cli configs
 
-arch: ## Границы модулей: import-linter по .importlinter (+ tests/architecture, когда появятся — Г.2)
+arch: ## Границы модулей: import-linter по .importlinter и архитектурные тесты tests/architecture (без БД)
 	$(RUN) lint-imports
 	@if [ -d tests/architecture ]; then $(RUN) pytest tests/architecture -p no:cacheprovider; fi
 
