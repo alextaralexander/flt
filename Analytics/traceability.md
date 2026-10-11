@@ -178,10 +178,10 @@
 | SYS-11 | Развёртывание | 1 | `Analytics/Specs/_system/SYS-11-deployment-and-environments.md` | approved |
 | SYS-12 | CI/CD и качество | 1 | `Analytics/Specs/_system/SYS-12-ci-cd-and-quality.md` | approved |
 | SYS-13 | Архитектура плагинов | 7 | `Analytics/Specs/_system/SYS-13-plugin-architecture.md` | — |
-| `shared_kernel` | Спецификация модуля: shared kernel | 1 | `Analytics/Specs/shared_kernel/_module.md` | draft |
-| `identity` | Спецификация модуля: identity (базовая часть) | 1 | `Analytics/Specs/identity/_module.md` | draft |
-| `llm_gateway` | Спецификация модуля: llm_gateway (базовая часть) | 1 | `Analytics/Specs/llm_gateway/_module.md` | draft |
-| `app_shell` | Спецификация модуля: frontend app-shell | 1 | `Analytics/Specs/app_shell/_module.md` | draft |
+| `shared_kernel` | Спецификация модуля: shared kernel | 1 | `Analytics/Specs/shared_kernel/_module.md` | review |
+| `identity` | Спецификация модуля: identity (базовая часть) | 1 | `Analytics/Specs/identity/_module.md` | review |
+| `llm_gateway` | Спецификация модуля: llm_gateway (базовая часть) | 1 | `Analytics/Specs/llm_gateway/_module.md` | review |
+| `app_shell` | Спецификация модуля: frontend app-shell | 1 | `Analytics/Specs/app_shell/_module.md` | review |
 | ADR-001 | Стек и политика версий (Python и FastAPI, React и TypeScript, переход на Python 3.14) | 1 | `Analytics/ADR/ADR-001-tech-stack.md` | accepted |
 | ADR-002 | Раскладка доменных модулей в boilerplate, скаффолдер, контроль границ модулей | 1 | `Analytics/ADR/ADR-002-module-layout.md` | accepted |
 | ADR-003 | Хранение состояния (PostgreSQL, Redis, крупные файлы) | 1 | `Analytics/ADR/ADR-003-state-storage.md` | accepted |
