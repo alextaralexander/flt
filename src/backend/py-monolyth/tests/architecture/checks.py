@@ -13,7 +13,6 @@
 import ast
 import configparser
 import fnmatch
-import inspect
 import json
 import re
 import sys
@@ -28,6 +27,7 @@ from sqlalchemy.orm import DeclarativeBase
 from starlette.routing import BaseRoute
 
 from app.core.modules import ModuleDefinition
+from app.core.security.security import access_declaration
 
 
 SERVICE_ROOT = Path(__file__).resolve().parents[2]
@@ -920,25 +920,19 @@ def router_prefix_violations(
 
 
 def _declares_access(dependant: Dependant) -> bool:
-    """В дереве зависимостей есть `auth_user(...)`/`auth_user_optional(...)` с непустым списком прав."""
+    """В дереве зависимостей есть `auth_user(...)`/`auth_user_optional(...)` с правом или маркер `public()`."""
     stack = list(dependant.dependencies)
     while stack:
         dependency = stack.pop()
-        call = dependency.call
-        qualname = getattr(call, "__qualname__", "")
-        if callable(call) and qualname.startswith(("auth_user.", "auth_user_optional.")):
-            permissions = inspect.getclosurevars(call).nonlocals.get("permissions_to_check")
-            if permissions:
-                return True
+        declaration = access_declaration(dependency.call)
+        if declaration is not None and (declaration.permission or declaration.kind == "public"):
+            return True
         stack.extend(dependency.dependencies)
     return False
 
 
 def route_access_violations(modules: Sequence[ModuleDefinition]) -> list[str]:
-    """Каждый REST-роут модуля объявляет требуемое право через `auth_user(...)` (SYS-06-R5).
-
-    Маркер `public=True` для анонимных роутов появляется вместе с механизмом прав в Г.4 (SYS-06-R10).
-    """
+    """Каждый REST-роут модуля объявляет право (`auth_user`, `auth_user_optional`) или `public()` (SYS-06-R5)."""
     violations = []
     for module in modules:
         if module.router is None:

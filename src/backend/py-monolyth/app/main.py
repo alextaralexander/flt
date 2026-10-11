@@ -2,7 +2,7 @@
 
 - `create_app()` — HTTP-приложение роли `api`: REST модулей (`/api/v1/<module>`), служебные
   `/v1/health`, `/v1/ready`, `/v1/metrics`, документация `/api/docs`, `/api/openapi.json`;
-  каждый ответ несёт `X-Instance-Id` (SYS-05-R5);
+  каждый ответ несёт `X-Instance-Id` (SYS-05-R5), `X-Request-ID` и `Content-Language` (SYS-03-R20, R30);
   Kafka не подключает. В роли `all` (local, pytest) дополнительно поднимает в своём
   lifespan брокер Kafka роли `worker`.
 - `create_worker_app()` — `AsgiFastStream` роли `worker`: брокер Kafka с роутерами модулей
@@ -23,14 +23,16 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.core.dao.caching.redis_conn import close_redis_client
 from app.core.dao.db_helpers.db_connection import dispose_engine, get_engine
+from app.core.http.context import RequestContextMiddleware
 from app.core.http.exception_handlers import register_exception_handlers
+from app.core.http.idempotency import IdempotencyMiddleware
 from app.core.http.instance_header import InstanceIdMiddleware
 from app.core.http.logging_middleware import register_logging_middleware
 from app.core.kafka.broker import create_broker
 from app.core.logging import logger_settings
 from app.core.metrics.metrics_controller import router as service_router
 from app.core.metrics.metrics_middleware import PrometheusMiddleware
-from app.core.modules import ModuleDefinition, load_modules, module_routers
+from app.core.modules import ModuleDefinition, install_modules, load_modules, module_routers
 from app.core.telemetry import SERVICE_NAME, setup_telemetry, stop_telemetry
 from app.modules.registry import MODULES
 from configs.settings import AppRole, settings
@@ -70,8 +72,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 def _resolve_modules(modules: Sequence[ModuleDefinition] | None) -> Sequence[ModuleDefinition]:
-    """Модули для сборки: переданные явно (тесты) или загруженные из реестра."""
-    return load_modules(MODULES) if modules is None else modules
+    """Модули для сборки: переданные явно (тесты) или загруженные из реестра.
+
+    Модули реестра проверяются при старте и регистрируются в контейнере процесса (`install_modules`:
+    точки расширения, провайдер ролей, верификатор токенов); явно переданные модули тестов контейнер
+    процесса не трогают.
+    """
+    if modules is not None:
+        return modules
+    registry = load_modules(MODULES)
+    install_modules(registry)
+    return registry
 
 
 def create_app(modules: Sequence[ModuleDefinition] | None = None, role: AppRole | None = None) -> FastAPI:
@@ -106,6 +117,9 @@ def create_app(modules: Sequence[ModuleDefinition] | None = None, role: AppRole 
         allow_headers=settings.ALLOW_HEADERS,
     )
     application.add_middleware(PrometheusMiddleware)
+    # Сохранение ответов идемпотентных POST (SYS-03-R18): внутри logging-middleware,
+    # чтобы видеть ответы обработчиков исключений и необработанные ошибки.
+    application.add_middleware(IdempotencyMiddleware)
 
     application.include_router(service_router)
     for router in module_routers(resolved_modules):
@@ -115,6 +129,8 @@ def create_app(modules: Sequence[ModuleDefinition] | None = None, role: AppRole 
 
     # Logging middleware (access-лог + 500 для неперехваченных ошибок)
     register_logging_middleware(application)
+    # X-Request-ID и Content-Language — снаружи logging-middleware: ID есть и в 500 (SYS-03-R20, R30)
+    application.add_middleware(RequestContextMiddleware)
     # Внешний слой: X-Instance-Id в каждом ответе, включая 500 и handshake WebSocket (SYS-05-R5)
     application.add_middleware(InstanceIdMiddleware)
 

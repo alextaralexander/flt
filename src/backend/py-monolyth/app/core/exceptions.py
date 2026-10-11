@@ -1,8 +1,10 @@
 """Доменные исключения сервиса (единый формат: мнемокод + параметры)."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.core.security.schemas import UserSecuritySchema
+
+if TYPE_CHECKING:
+    from app.core.security.schemas import UserSecuritySchema
 
 
 class BaseCustomException(Exception):
@@ -71,7 +73,7 @@ class InsufficientPermissionsError(BaseCustomException):
         permissions_to_check: list[str],
     ) -> None:
         """Вычисляет недостающие permissions и формирует 403-ошибку."""
-        missing_permissions = tuple(set(permissions_to_check) - set(user.permissions))
+        missing_permissions = tuple(set(permissions_to_check) - {grant.code for grant in user.permissions})
 
         self.description = "Occurs when the user does not have sufficient permissions to call the controller."
         super().__init__(

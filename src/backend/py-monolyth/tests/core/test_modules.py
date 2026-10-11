@@ -47,7 +47,7 @@ class TestLoadModule:
         loaded = load_modules(["fake_mod"])
 
         # - Assert -
-        assert loaded == [definition]
+        assert list(loaded) == [definition]
 
     def test_missing_package_is_reported(self) -> None:
         """Модуль из реестра без пакета — понятная ошибка."""

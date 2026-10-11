@@ -54,3 +54,19 @@ def bind_broker_log_context(message: Any, *, reset: bool = True) -> None:
                 context[key] = value
 
     bind_log_context(reset=reset, **context)
+
+
+def get_logger(name: str) -> structlog.stdlib.BoundLogger:
+    """Логгер `flt.<module>.<name>`: второй сегмент имени попадает в поле `module` записи (ADR-010).
+
+    Args:
+        name: Имя вида `flt.<module>.<component>` (`flt.core.<component>` для shared kernel).
+
+    Raises:
+        ValueError: Имя не вида `flt.<module>[.<component>]`.
+    """
+    parts = name.split(".")
+    if len(parts) < 2 or parts[0] != "flt" or not parts[1]:
+        raise ValueError(f"Имя логгера {name!r} должно быть вида flt.<module>[.<component>] (ADR-010).")
+    logger: structlog.stdlib.BoundLogger = structlog.stdlib.get_logger(name)
+    return logger

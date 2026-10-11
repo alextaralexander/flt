@@ -13,12 +13,15 @@ import structlog
 from structlog.types import Processor
 
 from app.core.logging.processors import (
+    add_module,
     add_open_telemetry_trace_context,
+    add_process_context,
     drop_color_message_key,
     drop_contextvars_keys,
     drop_kafka_processed_message_noise,
     flatten_structlog_extra,
     move_logger_to_event_prefix,
+    redact_sensitive_keys,
     rename_event_key,
 )
 from configs.settings import settings
@@ -33,6 +36,8 @@ class LoggerConfig:
             structlog.contextvars.merge_contextvars,
             drop_contextvars_keys,
             structlog.stdlib.add_logger_name,
+            add_module,
+            add_process_context,
             structlog.stdlib.add_log_level,
             structlog.stdlib.PositionalArgumentsFormatter(),
             structlog.stdlib.ExtraAdder(),
@@ -45,16 +50,24 @@ class LoggerConfig:
         ]
         self._is_configured = False
 
+    def pipeline(self, *, json_format: bool) -> list[Processor]:
+        """Цепочка процессоров записи: общие, затем JSON-специфичные, последним — маскирование.
+
+        Маскирование (`redact_sensitive_keys`) стоит после форматирования исключений, чтобы секреты
+        не утекали и через текст traceback-а (ADR-010, раздел 3.2; SYS-02-R46).
+        """
+        processors = list(self.shared_processors)
+        if json_format:
+            # Переименовываем `event` в `message` и форматируем исключения только для JSON-логов.
+            processors += [rename_event_key, structlog.processors.format_exc_info]
+        return [*processors, redact_sensitive_keys]
+
     def setup_logging(self) -> None:
         """Настраивает логирование (идемпотентно: повторные вызовы — no-op)."""
         if self._is_configured:
             return
 
-        if settings.LOG_JSON_FORMAT:
-            # Переименовываем `event` в `message` только для JSON-логов.
-            self.shared_processors.append(rename_event_key)
-            # Форматируем исключения только для JSON-логов.
-            self.shared_processors.append(structlog.processors.format_exc_info)
+        self.shared_processors = self.pipeline(json_format=settings.LOG_JSON_FORMAT)
 
         structlog.configure(
             processors=[*self.shared_processors, structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
