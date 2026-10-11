@@ -2,6 +2,7 @@
 
 - `create_app()` — HTTP-приложение роли `api`: REST модулей (`/api/v1/<module>`), служебные
   `/v1/health`, `/v1/ready`, `/v1/metrics`, документация `/api/docs`, `/api/openapi.json`;
+  каждый ответ несёт `X-Instance-Id` (SYS-05-R5);
   Kafka не подключает. В роли `all` (local, pytest) дополнительно поднимает в своём
   lifespan брокер Kafka роли `worker`.
 - `create_worker_app()` — `AsgiFastStream` роли `worker`: брокер Kafka с роутерами модулей
@@ -23,6 +24,7 @@ from starlette.middleware.cors import CORSMiddleware
 from app.core.dao.caching.redis_conn import close_redis_client
 from app.core.dao.db_helpers.db_connection import dispose_engine, get_engine
 from app.core.http.exception_handlers import register_exception_handlers
+from app.core.http.instance_header import InstanceIdMiddleware
 from app.core.http.logging_middleware import register_logging_middleware
 from app.core.kafka.broker import create_broker
 from app.core.logging import logger_settings
@@ -108,8 +110,10 @@ def create_app(modules: Sequence[ModuleDefinition] | None = None, role: AppRole 
 
     register_exception_handlers(application)
 
-    # Logging middleware (внешний слой: access-лог + 500 для неперехваченных ошибок)
+    # Logging middleware (access-лог + 500 для неперехваченных ошибок)
     register_logging_middleware(application)
+    # Внешний слой: X-Instance-Id в каждом ответе, включая 500 и handshake WebSocket (SYS-05-R5)
+    application.add_middleware(InstanceIdMiddleware)
 
     return application
 
