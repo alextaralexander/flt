@@ -7,7 +7,7 @@ import pytest
 from app.core.kafka.base_message import BaseMessageHeaderSchema, BaseMessageSchema
 
 
-pytestmark = pytest.mark.no_db
+pytestmark = [pytest.mark.no_db, pytest.mark.req("SYS-04-R20")]
 
 
 class TestBaseMessage:

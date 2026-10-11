@@ -10,7 +10,7 @@ docker-compose монтирует файлы отсюда bind-mount-ом тол
 
 | Каталог | Файлы | Решение | Этап |
 |---|---|---|---|
-| `haproxy/` | `haproxy.cfg` | ADR-012 | 1 Г.8 |
+| `haproxy/` | `haproxy.cfg` | ADR-012 | 1 Г.3 (стенд N3), Г.8 (TLS, Nginx, MinIO) |
 | `nginx/` | `frontend.conf` (копируется в образ `flt-frontend`) | ADR-005 §3.8 | 1 Г.1 (frontend) |
 | `prometheus/` | `prometheus.yml`, `scrape/compose.yml`, `scrape/kubernetes.yml`, `rules/*.yml` | ADR-010 | 1 Г.8, Г.9 |
 | `grafana/` | `provisioning/{datasources,dashboards,alerting}/*.yml`, `dashboards/*.json` | ADR-010 | 1 Г.9 |

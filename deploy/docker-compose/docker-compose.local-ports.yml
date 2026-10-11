@@ -1,0 +1,19 @@
+# Оверлей стенда local: публикация портов инфраструктуры на loopback хоста для процессов на
+# машине разработчика (`make dev`, pytest) — SYS-11-R13. Базовый docker-compose.yml и стенд N3
+# (docker-compose.ci.yml) эти порты не публикуют, поэтому стенд не конфликтует с локальной
+# инфраструктурой по портам. Подключает `make compose-up` (src/backend/py-monolyth/Makefile):
+#   docker compose -f docker-compose.yml -f docker-compose.local-ports.yml up -d --wait postgres redis kafka
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  kafka:
+    ports:
+      # listener EXTERNAL (advertised localhost:9092) — для процессов на хосте.
+      - "127.0.0.1:9092:9092"

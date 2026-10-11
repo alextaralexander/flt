@@ -1,7 +1,8 @@
-# CI репозитория FLT — быстрая ступень (ADR-011 §3.1, SYS-12-R2, R4, R12, R25).
-# Минимальный состав этапа 1 Г.1: changes, backend-quality, architecture, backend-tests,
-# frontend, docs, ci-ok. Job-ы tools, contracts, commits, dependency-audit и тяжёлая ступень
-# (images, stand-n3, e2e, helm по условию run_full) добавляются в Г.10.
+# CI репозитория FLT — быстрая ступень (ADR-011 §3.1, SYS-12-R2, R4, R12, R25) и первый job
+# тяжёлой ступени stand-n3 (Г.3, SYS-05-R54, SYS-12-R3).
+# Состав этапа 1 Г.1: changes, backend-quality, architecture, backend-tests, frontend, docs, ci-ok;
+# Г.3: stand-n3. Job-ы tools, contracts, commits, dependency-audit и остальная тяжёлая ступень
+# (images, e2e, helm по условию run_full) добавляются в Г.10.
 # Правило always-report: job, чьи пути не менялись, не пропускается, а завершается
 # успехом пустым шагом — иначе обязательная проверка branch protection осталась бы без статуса.
 name: ci
@@ -218,8 +219,10 @@ jobs:
           PG_PORT: "5432"
           PG_USERNAME: flt
           PG_PASSWORD: flt_ci # pragma: allowlist secret
+          PG_DATABASE: flt_test
           REDIS_HOST: 127.0.0.1
           REDIS_PORT: "6379"
+          REDIS_DB: "15"
           KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9092
           PYTEST_ADDOPTS: --junitxml=reports/junit.xml --cov-report=xml:reports/coverage.xml
         run: |
@@ -328,11 +331,68 @@ jobs:
         if: env.CHANGED == 'true'
         run: uvx --from "pre-commit==${PRE_COMMIT_VERSION}" pre-commit run actionlint --all-files
 
+  # Тяжёлая ступень (ADR-011 §3.1, SYS-12-R3, SYS-05-R54): стенд из N = 3 инстансов роли api за
+  # HAProxy (docker-compose.yml + docker-compose.ci.yml, проект flt) и тесты pytest -m n_instances.
+  # Выполняется при run_full и изменении backend или deploy; иначе отчитывается успехом (always-report).
+  # До job-а images (Г.10) образ flt-backend собирается здесь же (make stand-up с --build).
+  stand-n3:
+    needs: changes
+    runs-on: ${{ vars.CI_HEAVY_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    env:
+      RUN_STAND: ${{ needs.changes.outputs.run_full == 'true' && (needs.changes.outputs.backend == 'true' || needs.changes.outputs.deploy == 'true') }}
+    steps:
+      - name: stand not required — always-report success
+        if: env.RUN_STAND != 'true'
+        run: echo "run_full is false or src/backend, src/protocol and deploy are unchanged"
+      - if: env.RUN_STAND == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: env.RUN_STAND == 'true'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: src/backend/py-monolyth/uv.lock
+      - name: install (backend test dependencies)
+        if: env.RUN_STAND == 'true'
+        working-directory: src/backend/py-monolyth
+        run: |
+          uv python install
+          make install
+      # docker compose -p flt … --profile ci up -d --wait --build --scale api=3 (SYS-05-R44).
+      - name: stand up (api x3 behind HAProxy, worker x2, migrate)
+        if: env.RUN_STAND == 'true'
+        working-directory: src/backend/py-monolyth
+        run: make stand-up
+      - name: tests on N instances (pytest -m n_instances)
+        if: env.RUN_STAND == 'true'
+        working-directory: src/backend/py-monolyth
+        env:
+          PYTEST_ADDOPTS: --junitxml=reports/junit-n3.xml
+        run: make stand-test
+      - name: compose logs
+        if: failure() && env.RUN_STAND == 'true'
+        working-directory: src/backend/py-monolyth
+        run: mkdir -p reports && make stand-logs > reports/compose-logs.txt 2>&1 || true
+      - if: always() && env.RUN_STAND == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stand-n3-reports
+          path: src/backend/py-monolyth/reports/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: stand down
+        if: always() && env.RUN_STAND == 'true'
+        working-directory: src/backend/py-monolyth
+        run: make stand-down
+
   # Сводная проверка для branch protection (ADR-011 §3.3, SYS-12-R4): падает, если любой
-  # job быстрой ступени упал, отменён или пропущен. В Г.10 добавляются job-ы tools, contracts,
-  # commits, dependency-audit и тяжёлая ступень с правилом «пропуск при run_full — ошибка».
+  # job упал, отменён или пропущен. Тяжёлый job stand-n3 при run_full == false отчитывается успехом
+  # пустым шагом (always-report), поэтому его пропуск тоже ошибка (SYS-12-R4). В Г.10 добавляются
+  # job-ы tools, contracts, commits, dependency-audit, images, e2e, helm.
   ci-ok:
-    needs: [changes, backend-quality, architecture, backend-tests, frontend, docs]
+    needs: [changes, backend-quality, architecture, backend-tests, frontend, docs, stand-n3]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 10

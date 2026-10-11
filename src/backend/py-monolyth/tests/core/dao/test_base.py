@@ -7,7 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.dao.db_helpers.base import NAMING_CONVENTION, make_module_base, module_metadata
 
 
-pytestmark = pytest.mark.no_db
+pytestmark = [pytest.mark.no_db, pytest.mark.req("SYS-05-R7")]
 
 
 class TestMakeModuleBase:

@@ -31,7 +31,15 @@ REQUIRED_ENV = {
 @pytest.fixture
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
     """Окружение без настроек процесса: значения задаёт сам тест."""
-    for name in (*REQUIRED_ENV, "REDIS_PASSWORD", "REDIS_MODE", "REDIS_SENTINEL_HOSTS", "STAND_NAME", "APP_ROLE"):
+    for name in (
+        *REQUIRED_ENV,
+        "REDIS_PASSWORD",
+        "REDIS_MODE",
+        "REDIS_SENTINEL_HOSTS",
+        "STAND_NAME",
+        "APP_ROLE",
+        "JWT_PUBLIC_KEYS",
+    ):
         monkeypatch.delenv(name, raising=False)
     yield monkeypatch
 

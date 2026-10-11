@@ -2,9 +2,13 @@
 
 from uuid import uuid4
 
+import pytest
 from httpx import AsyncClient
 
 from app.core.metrics.metrics_middleware import REQUEST_COUNT, UNMATCHED_ENDPOINT
+
+
+pytestmark = pytest.mark.req("SYS-10-R33")
 
 
 def _endpoint_labels() -> set[str]:

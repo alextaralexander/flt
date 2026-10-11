@@ -6,14 +6,18 @@
 # Запускаем инструменты в окружении uv. Если uv недоступен — переопредели: make RUN= ...
 RUN ?= uv run
 REPO_ROOT := $(abspath $(CURDIR)/../../..)
-COMPOSE_FILE ?= ../../../deploy/docker-compose/docker-compose.yml
+COMPOSE_DIR ?= ../../../deploy/docker-compose
+COMPOSE_FILE ?= $(COMPOSE_DIR)/docker-compose.yml
+# Стенд local: порты инфраструктуры на loopback хоста (SYS-11-R13).
+COMPOSE_LOCAL_PORTS_FILE ?= $(COMPOSE_DIR)/docker-compose.local-ports.yml
 # Инфраструктура для запуска сервиса на хосте (сам сервис в compose — сервис `backend`).
 COMPOSE_INFRA ?= postgres redis kafka
 # Путь до py-main-lib: path-зависимость uv (pyproject.toml) и build-context Docker-образа.
 PY_MAIN_LIB ?= ../py-main-lib
 
 .DEFAULT_GOAL := help
-.PHONY: help install dev run run-worker test test-cov test-docker format format-check lint lint-fix typecheck arch \
+.PHONY: help install dev run run-worker test test-cov test-docker test-n3 stand-up stand-test stand-down stand-logs \
+        format format-check lint lint-fix typecheck arch \
         security secrets-scan check migrate makemigration migrate-downgrade asyncapi \
         scaffold-module scaffold-entity scaffold-subscriber list-modules lock pre-commit \
         compose-up compose-down docker-build clean
@@ -83,15 +87,50 @@ test-cov: ## Тесты с отчётом покрытия (порог — fail_
 
 TEST_PG_CONTAINER ?= flt-backend-test-pg
 TEST_PG_PORT ?= 54329
+TEST_REDIS_CONTAINER ?= flt-backend-test-redis
+TEST_REDIS_PORT ?= 56379
 
-test-docker: ## Тесты в одноразовом Postgres (docker run), без локальной инфраструктуры
+test-docker: ## Тесты в одноразовых PostgreSQL и Redis (docker run), без локальной инфраструктуры
 	@docker run -d --rm --name $(TEST_PG_CONTAINER) \
-		-e POSTGRES_USER=ms_py_test -e POSTGRES_PASSWORD=ms_py_test -e POSTGRES_DB=flt \
-		-p $(TEST_PG_PORT):5432 postgres:16-alpine >/dev/null
-	@until docker exec $(TEST_PG_CONTAINER) pg_isready -U ms_py_test -d flt >/dev/null 2>&1; do sleep 0.5; done
-	@PG_PORT=$(TEST_PG_PORT) $(RUN) pytest; STATUS=$$?; \
-		docker stop $(TEST_PG_CONTAINER) >/dev/null; \
+		-e POSTGRES_USER=flt -e POSTGRES_PASSWORD=flt_local -e POSTGRES_DB=flt \
+		-p 127.0.0.1:$(TEST_PG_PORT):5432 postgres:18-alpine >/dev/null
+	@docker run -d --rm --name $(TEST_REDIS_CONTAINER) -p 127.0.0.1:$(TEST_REDIS_PORT):6379 redis:8-alpine >/dev/null
+	@until docker exec $(TEST_PG_CONTAINER) pg_isready -U flt -d flt >/dev/null 2>&1; do sleep 0.5; done
+	@# База pytest flt_test (SYS-10-R4); pg_isready отвечает до окончания init-скриптов — повторяем.
+	@until docker exec $(TEST_PG_CONTAINER) psql -U flt -d flt -qc 'CREATE DATABASE flt_test' >/dev/null 2>&1; do sleep 0.5; done
+	@PG_PORT=$(TEST_PG_PORT) REDIS_PORT=$(TEST_REDIS_PORT) $(RUN) pytest; STATUS=$$?; \
+		docker stop $(TEST_PG_CONTAINER) $(TEST_REDIS_CONTAINER) >/dev/null; \
 		exit $$STATUS
+
+# --- Стенд из N инстансов за HAProxy (SYS-05-R44–R54, ADR-011 job stand-n3) ---------------------
+# Проект compose — flt (SYS-11-R28): стенд заменяет контейнеры `make compose-up` того же проекта,
+# данные стенда local не трогает (у стенда PostgreSQL на tmpfs). Параллельно с локальной
+# инфраструктурой — другой проект: make test-n3 STAND_PROJECT=flt-n3.
+STAND_PROJECT ?= flt
+STAND_SCALE ?= 3
+STAND_URL ?= http://127.0.0.1:8080
+# --build собирает образ flt-backend; готовый образ: STAND_UP_FLAGS=--no-build FLT_BACKEND_IMAGE=<тег>.
+STAND_UP_FLAGS ?= --build
+STAND_COMPOSE = docker compose -p $(STAND_PROJECT) -f $(COMPOSE_FILE) -f $(COMPOSE_DIR)/docker-compose.ci.yml --profile ci
+
+stand-up: ## Поднять стенд N3: migrate, api × 3 за HAProxy (:8080), worker × 2, PostgreSQL, Redis, Kafka
+	$(STAND_COMPOSE) up -d --wait $(STAND_UP_FLAGS) --scale api=$(STAND_SCALE)
+
+stand-test: ## Тесты масштабируемости на поднятом стенде: pytest -m n_instances --stand-url $(STAND_URL)
+	$(RUN) pytest -m n_instances tests/n_instances --stand-url $(STAND_URL) --stand-project $(STAND_PROJECT)
+
+stand-logs: ## Логи контейнеров стенда N3
+	$(STAND_COMPOSE) logs --no-color --timestamps
+
+stand-down: ## Погасить стенд N3 (данные стенда — на tmpfs, тома local не удаляются)
+	$(STAND_COMPOSE) down --remove-orphans
+
+test-n3: ## Поднять стенд N3, прогнать тесты n_instances, погасить стенд (логи — при падении)
+	@$(MAKE) --no-print-directory stand-up || { $(MAKE) --no-print-directory stand-logs; \
+		$(MAKE) --no-print-directory stand-down; exit 1; }
+	@$(MAKE) --no-print-directory stand-test; STATUS=$$?; \
+		if [ $$STATUS -ne 0 ]; then $(MAKE) --no-print-directory stand-logs; fi; \
+		$(MAKE) --no-print-directory stand-down; exit $$STATUS
 
 # --- Полная проверка (Definition of Done) ----------------------------------
 
@@ -146,11 +185,11 @@ asyncapi: ## Показать, где доступна AsyncAPI-документ
 	@echo "AsyncAPI Kafka: http://localhost:$${WORKER_HTTP_PORT:-8001}/asyncapi/kafka"
 	@echo "Запусти 'make run-worker' и открой ссылку или сделай curl."
 
-compose-up: ## Поднять локальную инфраструктуру (PostgreSQL, Redis, Kafka) из deploy/docker-compose
-	docker compose -f $(COMPOSE_FILE) up -d --wait $(COMPOSE_INFRA)
+compose-up: ## Поднять локальную инфраструктуру (PostgreSQL с базами flt и flt_test, Redis, Kafka) из deploy/docker-compose
+	docker compose -f $(COMPOSE_FILE) -f $(COMPOSE_LOCAL_PORTS_FILE) up -d --wait $(COMPOSE_INFRA)
 
 compose-down: ## Остановить локальную инфраструктуру
-	docker compose -f $(COMPOSE_FILE) down
+	docker compose -f $(COMPOSE_FILE) -f $(COMPOSE_LOCAL_PORTS_FILE) down
 
 docker-build: ## Собрать Docker-образ сервиса (py-main-lib — build-context)
 	docker build --build-context py-main-lib=$(PY_MAIN_LIB) -t flt-backend:local .

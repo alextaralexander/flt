@@ -12,7 +12,7 @@ from app.core.security.security import auth_user, check_permissions, check_token
 from app.main import create_app
 
 
-pytestmark = pytest.mark.no_db
+pytestmark = [pytest.mark.no_db, pytest.mark.req("SYS-02-R20")]
 
 
 def _user(permissions: set[str] | None = None) -> UserSecuritySchema:

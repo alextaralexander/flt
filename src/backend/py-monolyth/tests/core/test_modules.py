@@ -20,7 +20,7 @@ from app.core.modules import (
 from app.modules.registry import MODULES
 
 
-pytestmark = pytest.mark.no_db
+pytestmark = [pytest.mark.no_db, pytest.mark.req("SYS-01-R1")]
 
 
 @pytest.fixture
