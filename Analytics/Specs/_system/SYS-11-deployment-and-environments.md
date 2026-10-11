@@ -735,7 +735,7 @@ verify_through_haproxy        # /healthz 200, jwks 200, 3× be_api UP
 | [OQ-17](../../open-questions.md) | Роли запуска монолита | нет | resolved (ADR-004); SYS-11 R9 закрывает часть «реплики по стендам» |
 | [OQ-11](../../open-questions.md) | Mailpit как dev-only сервис | нет | resolved; принцип зафиксирован в R5 |
 | [OQ-07](../../open-questions.md) | Среда продуктива | нет | resolved; VPS — R15, R23; переход — R27 |
-| [OQ-63](../../open-questions.md) | Kafka без SASL во внутренней сети | нет | planned → ADR-013 (принят: без SASL); требование изоляции сети — R13 |
+| [OQ-63](../../open-questions.md) | Kafka без SASL во внутренней сети | нет | resolved (ADR-013: без SASL); требование изоляции сети — R13 |
 | [OQ-64](../../open-questions.md) | Сервер хранилища для prod (MinIO) | нет (блокирует prod-VPS, этап 2) | open; R4 и R7 используют зафиксированный тег до решения; замена образа — правка `docker-compose.yml`, `values.yaml`, `minio-init` |
 | [OQ-79](../../open-questions.md) | Второе хранилище резервных копий в РФ | нет (блокирует prod-VPS, этап 2) | open: варианты в R18 |
 | [OQ-80](../../open-questions.md) | Шифрование диска VPS | нет (блокирует prod-VPS, этап 2) | open: варианты в R23 п. 9 |
@@ -749,4 +749,4 @@ verify_through_haproxy        # /healthz 200, jwks 200, 3× be_api UP
 | Версия | Дата | Автор | Что изменилось | Статус |
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
-| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R4 — контейнер `blackbox-exporter` (профиль `prod`, внешняя доступность и срок TLS-сертификата), тег `minio/mc` закрепляется вместе с тегом сервера; R5 — `blackbox-exporter` в профиле `prod`; R6 — chart `prometheus-community` для `blackbox-exporter`; R13 — порт 9115 внутри сети, проверка снятия `X-Instance-Id` в HAProxy (SYS-05-R5); R18 — второе хранилище — OQ-79, RPO и RTO — по SYS-02; R23 п. 9 — шифрование диска — SYS-02-R61, OQ-80; раздел 9 — статус OQ-17, добавлены OQ-79, OQ-80 | draft |
+| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R4 — контейнер `blackbox-exporter` (профиль `prod`, внешняя доступность и срок TLS-сертификата), тег `minio/mc` закрепляется вместе с тегом сервера; R5 — `blackbox-exporter` в профиле `prod`; R6 — chart `prometheus-community` для `blackbox-exporter`; R13 — порт 9115 внутри сети, проверка снятия `X-Instance-Id` в HAProxy (SYS-05-R5); R18 — второе хранилище — OQ-79, RPO и RTO — по SYS-02; R23 п. 9 — шифрование диска — SYS-02-R61, OQ-80; раздел 9 — статус OQ-17, добавлены OQ-79, OQ-80; раздел 9 — OQ-63 resolved | draft |
