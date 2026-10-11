@@ -8,6 +8,7 @@
 """
 
 import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
@@ -27,6 +28,9 @@ FORBIDDEN_CONTENT_TYPES = frozenset(
 INLINE_PREFIXES = ("image/", "video/", "audio/", "application/pdf")
 PUBLIC_PREFIX = "public/"
 PUBLIC_BUCKET = "flt-cms"
+DEFAULT_PART_BYTES = 16 * 1024 * 1024
+MIN_PART_BYTES = 5 * 1024 * 1024
+MULTIPART_TTL_SECONDS = 3600
 
 
 class ForbiddenContentTypeError(ValueError):
@@ -39,6 +43,23 @@ class PresignedPost:
 
     url: str
     fields: dict[str, str]
+
+
+@dataclass(frozen=True)
+class MultipartUpload:
+    """Multipart-загрузка: идентификатор и presigned PUT каждой части (номера с 1)."""
+
+    upload_id: str
+    part_urls: list[str]
+    part_bytes: int
+
+
+@dataclass(frozen=True)
+class UploadedPart:
+    """Загруженная часть: номер и `ETag` из ответа хранилища."""
+
+    number: int
+    etag: str
 
 
 @dataclass(frozen=True)
@@ -85,8 +106,7 @@ class FileStorage:
         Raises:
             ForbiddenContentTypeError: Тип из запрещённого списка.
         """
-        if content_type.split(";", 1)[0].strip().lower() in FORBIDDEN_CONTENT_TYPES:
-            raise ForbiddenContentTypeError(content_type)
+        _check_content_type(content_type)
         async with self._client(public=True) as client:
             post = await client.generate_presigned_post(
                 Bucket=bucket,
@@ -96,6 +116,68 @@ class FileStorage:
                 ExpiresIn=expires_in or self.settings.S3_UPLOAD_TTL_SECONDS,
             )
         return PresignedPost(url=post["url"], fields=dict(post["fields"]))
+
+    async def create_multipart_upload(
+        self,
+        bucket: str,
+        key: str,
+        *,
+        content_type: str,
+        total_bytes: int,
+        part_bytes: int = DEFAULT_PART_BYTES,
+        expires_in: int = MULTIPART_TTL_SECONDS,
+    ) -> MultipartUpload:
+        """Начинает multipart-загрузку и подписывает PUT для каждой части (ADR-007, раздел 3.1).
+
+        Raises:
+            ForbiddenContentTypeError: Тип из запрещённого списка.
+            ValueError: Размер части меньше минимума S3 (5 МиБ) при нескольких частях.
+        """
+        _check_content_type(content_type)
+        parts = max(1, -(-total_bytes // part_bytes))
+        if parts > 1 and part_bytes < MIN_PART_BYTES:
+            raise ValueError("Часть multipart-загрузки не меньше 5 МиБ (ограничение S3).")
+        async with self._client(public=False) as client:
+            created = await client.create_multipart_upload(Bucket=bucket, Key=key, ContentType=content_type)
+        upload_id = str(created["UploadId"])
+        async with self._client(public=True) as client:
+            urls = [
+                await client.generate_presigned_url(
+                    "upload_part",
+                    Params={"Bucket": bucket, "Key": key, "UploadId": upload_id, "PartNumber": number},
+                    ExpiresIn=expires_in,
+                )
+                for number in range(1, parts + 1)
+            ]
+        return MultipartUpload(upload_id=upload_id, part_urls=urls, part_bytes=part_bytes)
+
+    async def complete_multipart_upload(self, bucket: str, key: str, upload_id: str, parts: list[UploadedPart]) -> None:
+        """Завершает multipart-загрузку по списку частей клиента (`confirm`)."""
+        async with self._client(public=False) as client:
+            await client.complete_multipart_upload(
+                Bucket=bucket,
+                Key=key,
+                UploadId=upload_id,
+                MultipartUpload={
+                    "Parts": [{"PartNumber": part.number, "ETag": part.etag} for part in sorted(parts, key=_number)]
+                },
+            )
+
+    async def abort_multipart_upload(self, bucket: str, key: str, upload_id: str) -> None:
+        """Отменяет незавершённую загрузку и освобождает загруженные части."""
+        async with self._client(public=False) as client:
+            await client.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=upload_id)
+
+    async def open_stream(self, bucket: str, key: str, chunk_bytes: int = 1024 * 1024) -> AsyncIterator[bytes]:
+        """Потоковое чтение объекта — только для фоновых заданий (обработка, sha256), не для HTTP-ответов."""
+        async with self._client(public=False) as client:
+            response = await client.get_object(Bucket=bucket, Key=key)
+            body = response["Body"]
+            try:
+                async for chunk in body.iter_chunks(chunk_bytes):
+                    yield chunk
+            finally:
+                body.close()
 
     async def presign_download(
         self,
@@ -175,6 +257,17 @@ class FileStorage:
                 if bucket == PUBLIC_BUCKET:
                     await client.put_bucket_policy(Bucket=bucket, Policy=json.dumps(public_read_policy(bucket)))
         return created
+
+
+def _check_content_type(content_type: str) -> None:
+    """Запрещённые всегда типы (ADR-007, раздел 3.7)."""
+    if content_type.split(";", 1)[0].strip().lower() in FORBIDDEN_CONTENT_TYPES:
+        raise ForbiddenContentTypeError(content_type)
+
+
+def _number(part: UploadedPart) -> int:
+    """Ключ сортировки частей."""
+    return part.number
 
 
 def public_read_policy(bucket: str) -> dict[str, Any]:

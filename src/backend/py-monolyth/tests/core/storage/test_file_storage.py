@@ -12,6 +12,7 @@ from app.core.modules import ModuleDefinition
 from app.core.storage.file_storage import (
     FileStorage,
     ForbiddenContentTypeError,
+    UploadedPart,
     bucket_name,
     public_read_policy,
 )
@@ -158,3 +159,49 @@ def test_object_key_and_statuses() -> None:
     assert object_key(owner, file_id, ".pdf") == f"u/{owner}/{file_id}.pdf"
     assert object_key(None, file_id) == f"public/{file_id}"
     assert [status.value for status in FileStatus] == ["pending", "uploaded", "processing", "ready", "deleted"]
+
+
+async def test_multipart_upload_complete_and_stream(storage: tuple[FileStorage, str]) -> None:
+    """Multipart: части по presigned PUT, завершение по ETag; объект читается потоком (ADR-007, 3.1)."""
+    # - Arrange -
+    client, prefix = storage
+    key = f"{prefix}{uuid4()}.bin"
+    first, second = b"a" * (5 * 1024 * 1024), b"tail"
+    upload = await client.create_multipart_upload(
+        BUCKET,
+        key,
+        content_type="application/octet-stream",
+        total_bytes=len(first) + len(second),
+        part_bytes=5 * 1024 * 1024,
+    )
+
+    # - Act -
+    async with httpx.AsyncClient(timeout=60) as http:
+        etags = [
+            (await http.put(url, content=chunk)).headers["etag"]
+            for url, chunk in zip(upload.part_urls, (first, second), strict=True)
+        ]
+    await client.complete_multipart_upload(
+        BUCKET, key, upload.upload_id, [UploadedPart(number, etag) for number, etag in enumerate(etags, start=1)]
+    )
+    streamed = b"".join([chunk async for chunk in client.open_stream(BUCKET, key)])
+
+    # - Assert -
+    assert len(upload.part_urls) == 2
+    assert streamed == first + second
+
+
+async def test_aborted_multipart_leaves_no_object(storage: tuple[FileStorage, str]) -> None:
+    """Отменённая multipart-загрузка не создаёт объект; мелкие части при нескольких частях запрещены."""
+    # - Arrange -
+    client, prefix = storage
+    key = f"{prefix}{uuid4()}.bin"
+    upload = await client.create_multipart_upload(BUCKET, key, content_type="application/pdf", total_bytes=10)
+
+    # - Act -
+    await client.abort_multipart_upload(BUCKET, key, upload.upload_id)
+
+    # - Assert -
+    assert await client.head(BUCKET, key) is None
+    with pytest.raises(ValueError, match="5"):
+        await client.create_multipart_upload(BUCKET, key, content_type="application/pdf", total_bytes=10, part_bytes=4)
