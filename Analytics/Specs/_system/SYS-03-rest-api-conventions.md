@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | draft |
-| Версия | 0.2 |
+| Статус | approved |
+| Версия | 1.0 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-11 (PR #3) |
 | Пункт(ы) BRD | все |
 | Модуль | все backend-модули, shared kernel (`app/core/http`), frontend (сгенерированный клиент), `src/tools/contracts` |
 | Зависимости | ADR-002, ADR-003, ADR-004, ADR-006, ADR-010, ADR-011, ADR-012 |
@@ -604,3 +604,4 @@ class InvalidCredentialsError(DomainError):
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R1 обоснование — пример ADR-004 исправлен в 1.1; R7 обоснование — OQ-69 resolved; R18 субъект анонима — cookie `flt_anon_session` (OQ-77); R13 проверка — права администратора в формате SYS-06; R19 путь теста N3 `tests/n_instances/core/`; R30 порядок локали: профиль → cookie `flt_ui_language` → `Accept-Language` → `ru`; раздел 9 — статусы OQ-25, OQ-69, OQ-70, добавлен OQ-77; `provider-connections` → `provider-bindings` в таблице исключений (термин SYS-08, ADR-009); пути тестов N3 R17, R18 — `tests/n_instances/core/` | draft |
+| 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
