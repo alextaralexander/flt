@@ -24,3 +24,8 @@ scheduled_runs = scheduled_runs_table(Base.metadata)
 
 # Модели модуля импортируются ниже, чтобы попасть в `Base.metadata` (Alembic, тесты);
 # строки добавляет `make scaffold-entity module=identity name=<Entity>`.
+
+from app.modules.identity.models.user import Credential, Role, User, UserRole  # noqa: E402
+
+
+__all__ = ("Base", "Credential", "Role", "User", "UserRole", "jobs", "outbox", "processed_events", "scheduled_runs")

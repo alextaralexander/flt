@@ -4,8 +4,15 @@
 тесты) не тянет за собой создание engine.
 """
 
-from sqlalchemy import MetaData
-from sqlalchemy.orm import DeclarativeBase
+from datetime import datetime
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy import DateTime, Integer, MetaData, func, text
+from sqlalchemy.orm import DeclarativeBase, Mapped, declared_attr, mapped_column
+
+from app.core.ids import new_id
+from app.core.time import Clock
 
 
 # Стабильные имена constraint-ов/индексов: autogenerate-миграции получаются
@@ -17,6 +24,11 @@ NAMING_CONVENTION = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
+
+
+def utc_now() -> datetime:
+    """Текущее время UTC для колонок времени — через `Clock` (подменяется `frozen_clock`)."""
+    return Clock().now()
 
 
 def module_metadata(schema: str) -> MetaData:
@@ -63,3 +75,41 @@ def make_module_base(schema: str) -> type[DeclarativeBase]:
 
     Base.__doc__ = f"Базовый класс моделей модуля `{schema}` (схема PostgreSQL `{schema}`)."
     return Base
+
+
+class IdMixin:
+    """Первичный ключ `id` — UUID v7 из `new_id()` (ADR-003)."""
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+
+
+class TimestampMixin:
+    """`created_at` и `updated_at` в UTC (`timestamptz`); `updated_at` обновляется при каждом UPDATE."""
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now, server_default=func.now()
+    )
+
+
+class VersionMixin:
+    """Оптимистическая блокировка: `version` — `version_id_col`; конфликт → `StaleDataError` → 409."""
+
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+
+    @declared_attr.directive
+    def __mapper_args__(cls) -> dict[str, Any]:
+        """Подключает `version` как счётчик версий SQLAlchemy."""
+        return {"version_id_col": cls.version}
+
+
+class SoftDeleteMixin:
+    """`deleted_at` — только по решению ТЗ; по умолчанию удаление физическое (ADR-003)."""
+
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class EntityBase(IdMixin, TimestampMixin, VersionMixin):
+    """Общая форма сущности: `id`, `created_at`, `updated_at`, `version` (ADR-003, SYS-05-R18)."""
