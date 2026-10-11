@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from configs.kafka_config import KafkaSettings
 from configs.redis_config import RedisMode, RedisSettings
-from configs.settings import Settings
+from configs.settings import AppRole, Settings
 
 
 pytestmark = pytest.mark.no_db
@@ -21,11 +21,6 @@ REQUIRED_ENV = {
     "PG_USERNAME": "flt",
     "PG_PASSWORD": "pg-secret-value",  # pragma: allowlist secret
     "AUTH_CSRF_SECRET": "csrf-secret-value",  # pragma: allowlist secret
-    "POOL_RECYCLE": "240",
-    "POOL_TIMEOUT": "30",
-    "POOL_SIZE": "10",
-    "POOL_MAX_OVERFLOW": "5",
-    "POOL_PRE_PING": "true",
     "ALLOW_ORIGINS": "[]",
     "ALLOW_CREDENTIALS": "true",
     "ALLOW_METHODS": '["*"]',
@@ -36,7 +31,7 @@ REQUIRED_ENV = {
 @pytest.fixture
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
     """Окружение без настроек процесса: значения задаёт сам тест."""
-    for name in (*REQUIRED_ENV, "REDIS_PASSWORD", "REDIS_MODE", "REDIS_SENTINEL_HOSTS", "STAND_NAME"):
+    for name in (*REQUIRED_ENV, "REDIS_PASSWORD", "REDIS_MODE", "REDIS_SENTINEL_HOSTS", "STAND_NAME", "APP_ROLE"):
         monkeypatch.delenv(name, raising=False)
     yield monkeypatch
 
@@ -79,9 +74,68 @@ class TestSettingsSecrets:
         fields = set(Settings.model_fields)
 
         # - Assert -
-        removed = {"JWT_SECRET_KEY", "JWT_ALGORITHM", "JWT_ROLE_PERMISSIONS", "PG_SCHEMA", "OPEN_SEARCH_URL"}
+        removed = {"JWT_SECRET_KEY", "JWT_ROLE_PERMISSIONS", "PG_SCHEMA", "OPEN_SEARCH_URL", "ROOT_PATH"}
         assert not fields & removed
+        # Миграции при старте инстанса запрещены — настройки нет (SYS-05, ADR-004).
+        assert "MIGRATE_ON_START" not in fields
         assert not {"KAFKA_USERNAME", "KAFKA_PASSWORD", "KAFKA_GROUP_ID"} & set(KafkaSettings.model_fields)
+
+
+class TestAppRole:
+    """Роль запуска: `all` по умолчанию только на local (ADR-004, раздел 3.5)."""
+
+    def test_local_defaults_to_all(self, clean_env: pytest.MonkeyPatch) -> None:
+        """На стенде local без APP_ROLE процесс работает в роли `all`."""
+        # - Arrange -
+        for name, value in REQUIRED_ENV.items():
+            clean_env.setenv(name, value)
+
+        # - Act -
+        settings = Settings(_env_file=None)  # type: ignore[call-arg]
+
+        # - Assert -
+        assert settings.role is AppRole.ALL
+        assert settings.WORKER_HTTP_PORT == 8001
+
+    def test_role_is_required_outside_local(self, clean_env: pytest.MonkeyPatch) -> None:
+        """Вне local APP_ROLE обязательна."""
+        # - Arrange -
+        for name, value in REQUIRED_ENV.items():
+            clean_env.setenv(name, value)
+        clean_env.setenv("STAND_NAME", "prod")
+
+        # - Act / Assert -
+        with pytest.raises(ValidationError, match="APP_ROLE"):
+            Settings(_env_file=None)  # type: ignore[call-arg]
+
+    def test_explicit_role_is_kept(self, clean_env: pytest.MonkeyPatch) -> None:
+        """Явно заданная роль принимается на любом стенде; неизвестная — ошибка."""
+        # - Arrange -
+        for name, value in REQUIRED_ENV.items():
+            clean_env.setenv(name, value)
+        clean_env.setenv("STAND_NAME", "prod")
+        clean_env.setenv("APP_ROLE", "worker")
+
+        # - Act -
+        settings = Settings(_env_file=None)  # type: ignore[call-arg]
+        clean_env.setenv("APP_ROLE", "scheduler")
+
+        # - Assert -
+        assert settings.role is AppRole.WORKER
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None)  # type: ignore[call-arg]
+
+    def test_kafka_client_id_contains_role_and_instance(self, clean_env: pytest.MonkeyPatch) -> None:
+        """client_id Kafka — `flt-<role>-<instance_id>`."""
+        # - Arrange -
+        clean_env.setenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
+        clean_env.setenv("HOSTNAME", "flt-worker-1")
+
+        # - Act -
+        client_id = KafkaSettings(_env_file=None).client_id("worker")  # type: ignore[call-arg]
+
+        # - Assert -
+        assert client_id == "flt-worker-flt-worker-1"
 
 
 class TestRedisSettings:

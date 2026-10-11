@@ -5,14 +5,11 @@ Kafka доступна только во внутренней сети (listener
 вычисляется из модуля и обработчика (`flt.<module>.<handler>`, ADR-004).
 """
 
-import os
-import socket
-
 from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from configs.stands import stand_env_file
+from configs.stands import instance_id, stand_env_file
 
 
 load_dotenv(".env")
@@ -40,15 +37,9 @@ class KafkaSettings(BaseSettings):
         description="Максимальный размер публикуемого сообщения, байт.",
     )
 
-    @property
-    def kafka_client_id_new(self) -> str:
-        """Уникальный client_id: базовый ID + идентификатор инстанса."""
-        return f"{self.KAFKA_CLIENT_ID}-{self.get_pod_identity()}"
-
-    @staticmethod
-    def get_pod_identity() -> str:
-        """Идентификатор инстанса: HOSTNAME пода/контейнера или hostname машины (локальный запуск)."""
-        return os.getenv("HOSTNAME") or socket.gethostname()
+    def client_id(self, role: str) -> str:
+        """client_id инстанса: `flt-<role>-<instance_id>` (ADR-004, раздел 3.5)."""
+        return f"{self.KAFKA_CLIENT_ID}-{role}-{instance_id()}"
 
 
 kafka_settings = KafkaSettings()

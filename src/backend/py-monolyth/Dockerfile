@@ -35,9 +35,9 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 USER app
 
-# В многорепличном деплое выключай миграции при старте (MIGRATE_ON_START=false)
-# и выполняй `alembic upgrade head` отдельным job/init-container-ом.
+# Роль процесса задаёт APP_ROLE (api, worker, migrate, media_agent — ADR-004); миграции —
+# только роль migrate отдельным шагом. HEALTHCHECK проверяет /v1/health на порту роли.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD ["python", "-c", "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.getenv(\"FAST_API_PORT\", \"8000\")}/v1/health')"]
+    CMD ["python", "-m", "app", "healthcheck"]
 
-CMD ["python", "uvi_run.py"]
+CMD ["python", "-m", "app"]

@@ -12,7 +12,7 @@ COMPOSE_INFRA ?= postgres redis kafka
 PY_MAIN_LIB ?= ../py-main-lib
 
 .DEFAULT_GOAL := help
-.PHONY: help install dev run test test-cov test-docker format format-check lint lint-fix typecheck arch \
+.PHONY: help install dev run run-worker test test-cov test-docker format format-check lint lint-fix typecheck arch \
         security secrets-scan check migrate makemigration migrate-downgrade asyncapi \
         scaffold-module scaffold-entity scaffold-subscriber list-modules lock pre-commit \
         compose-up compose-down docker-build clean
@@ -32,11 +32,14 @@ lock: ## Пересобрать uv.lock из pyproject.toml
 
 # --- Запуск -----------------------------------------------------------------
 
-dev: ## Запустить dev-сервер с автоперезагрузкой
-	$(RUN) uvicorn app.main:app --reload --host $${FAST_API_HOST:-0.0.0.0} --port $${FAST_API_PORT:-8000}
+dev: ## Dev-сервер с автоперезагрузкой: роль all (api + брокер Kafka), порт 8000
+	APP_ROLE=all $(RUN) uvicorn app.main:create_app --factory --reload --host $${FAST_API_HOST:-127.0.0.1} --port $${FAST_API_PORT:-8000}
 
-run: ## Запустить приложение (prod-режим, как в Docker)
-	$(RUN) python uvi_run.py
+run: migrate ## Как в Docker: роль migrate (make migrate), затем роль api (python -m app)
+	APP_ROLE=api $(RUN) python -m app
+
+run-worker: ## Роль worker: консьюмеры Kafka и служебный HTTP на WORKER_HTTP_PORT (8001)
+	APP_ROLE=worker $(RUN) python -m app
 
 # --- Качество кода (ruff = формат + импорты + линт) --------------------------
 
@@ -138,9 +141,9 @@ list-modules: ## Показать модули реестра (app/modules/regis
 
 # --- AsyncAPI / инфраструктура ---------------------------------------------
 
-asyncapi: ## Показать, где доступна AsyncAPI-документация (нужен запущенный сервер)
-	@echo "AsyncAPI Kafka: http://localhost:$${FAST_API_PORT:-8000}/asyncapi/kafka"
-	@echo "Запусти сервер 'make dev' и открой ссылки или сделай curl."
+asyncapi: ## Показать, где доступна AsyncAPI-документация (нужна запущенная роль worker)
+	@echo "AsyncAPI Kafka: http://localhost:$${WORKER_HTTP_PORT:-8001}/asyncapi/kafka"
+	@echo "Запусти 'make run-worker' и открой ссылку или сделай curl."
 
 compose-up: ## Поднять локальную инфраструктуру (PostgreSQL, Redis, Kafka) из deploy/docker-compose
 	docker compose -f $(COMPOSE_FILE) up -d --wait $(COMPOSE_INFRA)

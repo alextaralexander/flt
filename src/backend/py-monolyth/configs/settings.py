@@ -8,8 +8,11 @@ docker-compose, Kubernetes Secret из Vault через External Secrets Operato
 содержит тестовые значения, помеченные `# pragma: allowlist secret`.
 """
 
+from enum import StrEnum
+from typing import Self
+
 from dotenv import load_dotenv
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
 
@@ -17,6 +20,16 @@ from configs.stands import DEFAULT_STAND_NAME, stand_env_file
 
 
 load_dotenv(".env")
+
+
+class AppRole(StrEnum):
+    """Роли запуска монолита из одного образа (ADR-004, раздел 3.5)."""
+
+    API = "api"
+    WORKER = "worker"
+    ALL = "all"
+    MIGRATE = "migrate"
+    MEDIA_AGENT = "media_agent"
 
 
 class Settings(BaseSettings):
@@ -36,9 +49,21 @@ class Settings(BaseSettings):
         default=False,
         description="Детали ошибок 500 в ответе; включается только на local (ADR-013).",
     )
-    MIGRATE_ON_START: bool = Field(
-        default=True,
-        description="Запускать миграции БД при старте; выключай в многорепличном деплое (миграции — отдельный job).",
+    APP_ROLE: AppRole | None = Field(
+        default=None,
+        description="Роль запуска (ADR-004): api, worker, all, migrate, media_agent; по умолчанию all только на local.",
+    )
+    WORKER_HTTP_PORT: int = Field(
+        default=8001,
+        description="Служебный HTTP-порт ролей worker и media_agent (/v1/health, /v1/ready, /v1/metrics).",
+    )
+    FORWARDED_ALLOW_IPS: str = Field(
+        default="*",
+        description="Кому uvicorn доверяет X-Forwarded-*: порт 8000 доступен только из внутренней сети (ADR-012).",
+    )
+    SHUTDOWN_GRACE_SECONDS: int = Field(
+        default=30,
+        description="Время на завершение активных запросов и стримов при остановке инстанса (ADR-009).",
     )
 
     # Logging
@@ -98,23 +123,6 @@ class Settings(BaseSettings):
         description="Пароль пользователя Postgres (секрет, ADR-013).",
     )
 
-    # Database Engine Settings
-    POOL_RECYCLE: int = Field(
-        description="Время жизни соединения в пуле SQLAlchemy (в секундах).",
-    )
-    POOL_TIMEOUT: int = Field(
-        description="Максимальное время ожидания получения нового соединения из пула.",
-    )
-    POOL_SIZE: int = Field(
-        description="Максимальное количество соединений в пуле.",
-    )
-    POOL_MAX_OVERFLOW: int = Field(
-        description="Максимальное количество соединений сверх POOL_SIZE.",
-    )
-    POOL_PRE_PING: bool = Field(
-        description="Проверять работоспособность соединения перед использованием.",
-    )
-
     # CORS
     ALLOW_ORIGINS: list[str] = Field(
         description="Список доменов, которым разрешён доступ (CORS Allow-Origin).",
@@ -129,16 +137,25 @@ class Settings(BaseSettings):
         description="Список разрешённых HTTP-заголовков (CORS Allow-Headers).",
     )
 
-    ROOT_PATH: str = Field(
-        default="",
-        description="Префикс пути монтирования приложения (root_path) за обратным прокси.",
-    )
-
     # OpenTelemetry: экспорт трейсов выключен до этапа 4 (ADR-010, OQ-20).
     OTLP_EXPORTER_ENDPOINT: str = Field(
         default="",
         description="Endpoint OTLP-экспортёра трейсов; пусто — экспорт выключен.",
     )
+
+    @model_validator(mode="after")
+    def _default_role_only_on_local(self) -> Self:
+        """Роль по умолчанию (`all`) — только на стенде local; на остальных `APP_ROLE` обязательна (ADR-004)."""
+        if self.APP_ROLE is None:
+            if self.STAND_NAME != DEFAULT_STAND_NAME:
+                raise ValueError("APP_ROLE обязательна на стендах, кроме local: api, worker, migrate, media_agent.")
+            self.APP_ROLE = AppRole.ALL
+        return self
+
+    @property
+    def role(self) -> AppRole:
+        """Роль запуска процесса (после валидации всегда задана)."""
+        return self.APP_ROLE or AppRole.ALL
 
     @property
     def sqlalchemy_database_uri(self) -> str:
