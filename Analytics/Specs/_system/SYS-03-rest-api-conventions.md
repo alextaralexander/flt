@@ -69,7 +69,7 @@
 
 ### SYS-03-R5 Имена параметров пути
 
-- **Формулировка**: параметр пути, идентифицирующий ресурс, должен называться `<entity>_id` в snake_case по имени сущности в единственном числе (`{course_id}`, `{enrollment_id}`, `{provider_connection_id}`); имя `{id}` без префикса не используется.
+- **Формулировка**: параметр пути, идентифицирующий ресурс, должен называться `<entity>_id` в snake_case по имени сущности в единственном числе (`{course_id}`, `{enrollment_id}`, `{provider_binding_id}`); имя `{id}` без префикса не используется.
 - **Обоснование**: при вложенности двух уровней `{id}` неоднозначен; одинаковые имена во всех модулях упрощают генерацию клиента и логи (`endpoint` метрик — шаблон маршрута, ADR-010).
 - **Проверка**: правило Spectral `flt-path-param-name` (`^[a-z][a-z0-9_]*_id$` для каждого `parameters[in=path].name`).
 - **Применимость**: backend, CI.
@@ -285,7 +285,7 @@
 | все | Роутер `APIRouter(prefix="/api/v1/<module-kebab>", tags=["<module>"])`; `operationId` по SYS-03-R24; схемы с префиксом модуля (SYS-03-R11); ошибки — подклассы `DomainError` с `code` `<module>.<name>` в `public/errors.py`; списки — `paginate_keyset()` shared kernel; `version` в `PUT`/`PATCH`; `Idempotency-Key` у создающих `POST`; контракт `Analytics/Specs/<module>/api/openapi.yaml` и тест `tests/contracts/test_openapi_<module>.py`; модули с заданиями — ресурс `/jobs/{job_id}` |
 | shared kernel (`app/core/http`) | `schemas.py` (`ErrorResponseV1`, `ErrorMessage`, `CorePage`, `CoreOffsetPage`, `CoreJobAcceptedResponse`), `errors.py` (`DomainError`, коды `core.*`), `exception_handlers.py` (перенос из `app/api`, `error_envelope`), middleware `request_id`, `body_limit`, `locale`, `deprecation`; зависимости `Idempotent()`, `paginate_keyset()`, `paginate_offset()`, `parse_sort()`; хелпер фильтрации по диапазонам |
 | identity | Дополнительный префикс `/api/v1/auth` (раздел 6); коды `identity.invalid_credentials`, `identity.refresh_reused`, `identity.csrf_invalid`, `identity.user_blocked`, `identity.account_exists_use_password`, `identity.external_account_taken`, `identity.login_rate_limited` (ADR-006); операции OAuth с редиректом (раздел 6); `GET /api/v1/auth/.well-known/jwks.json` (раздел 6) |
-| llm_gateway | `POST /api/v1/llm-gateway/provider-connections/{provider_connection_id}/test` — единственный синхронный внешний вызов по REST (раздел 6; SYS-08) |
+| llm_gateway | `POST /api/v1/llm-gateway/provider-bindings/{provider_binding_id}/test` — единственный синхронный внешний вызов по REST (раздел 6; SYS-08) |
 | local_runtime | `POST /api/v1/local-runtime/pairings` и `…/pairings/{pairing_id}/token` — анонимные операции с лимитом (ADR-008); прочее по общим правилам |
 | frontend (app_shell, shared) | orval генерирует клиент из контрактов; интерсептор axios: `X-CSRF-Token`, повтор после `401` через `refresh`, обработка не-JSON `429`/`413`/`503`, предупреждение по `Deprecation`; zod-схемы ответов терпимы к новым полям и значениям перечислений (SYS-03-R29) |
 | `src/tools/contracts` | `.spectral.yaml` с правилами `flt-*` из этой спецификации поверх `spectral:oas`; `flt-tools contracts check` (Spectral + `oasdiff breaking`) |
@@ -552,7 +552,7 @@ class InvalidCredentialsError(DomainError):
 | SYS-03-R4 | `GET /api/v1/auth/.well-known/jwks.json` | путь задан RFC 8615 и ADR-006 (раздел 3.3); сегмент содержит `.` | бессрочно | ADR-006, пользователь, 2026-10-10 |
 | SYS-03-R6, R21, R26 | `GET /api/v1/auth/{provider}/start`, `GET /api/v1/auth/{provider}/callback` | OAuth redirect-flow по ADR-006: ответ `302` и cookie `flt_oauth`, тело не JSON | бессрочно | ADR-006, пользователь, 2026-10-10 |
 | SYS-03-R18 | `POST /api/v1/auth/login`, `/refresh`, `/logout`, `/logout-all`, `POST /api/v1/local-runtime/pairings/{pairing_id}/token` (`x-flt-idempotency-exempt: true`) | идемпотентны по природе или защищены ротацией (ADR-006, раздел 3.2); опрос токена сопряжения повторяется по протоколу (ADR-008) | бессрочно | ADR-006, ADR-008, пользователь, 2026-10-10 |
-| SYS-03-R27 | `POST /api/v1/llm-gateway/provider-connections/{provider_connection_id}/test`, `POST /api/v1/speech/provider-connections/{provider_connection_id}/test` | проверка подключения требует одного синхронного вызова провайдера с таймаутом 10 с (SYS-08); результат нужен пользователю сразу | бессрочно | предлагается SYS-08, утверждается на G1 SYS-03 и SYS-08 |
+| SYS-03-R27 | `POST /api/v1/llm-gateway/provider-bindings/{provider_binding_id}/test`, `POST /api/v1/speech/provider-bindings/{provider_binding_id}/test` | проверка подключения требует одного синхронного вызова провайдера с таймаутом 10 с (SYS-08); результат нужен пользователю сразу | бессрочно | предлагается SYS-08, утверждается на G1 SYS-03 и SYS-08 |
 | SYS-03-R21 (анонимный доступ) | операции с `x-flt-public: true`: `/api/v1/auth/register`, `/login`, `/password/forgot`, `/{provider}/start`, `/.well-known/jwks.json`, `/me/auth-providers`, `/api/v1/local-runtime/pairings`, каталог курсов `GET /api/v1/courses/catalog`, CMS-страницы `GET /api/v1/cms/pages/{slug}`, быстрый тест `/api/v1/assessment/quick-test/*` | публичные сценарии посетителя портала (VIS-01–VIS-05) и сопряжение агента (ADR-008); матрица — SYS-06 | бессрочно | SYS-06 на G1; перечень дополняется ТЗ этапа 2 |
 
 Исключений из SYS-03-R26 (`multipart/form-data`) на этапе 1 нет: загрузки идут через presigned URL (ADR-007).
@@ -603,4 +603,4 @@ class InvalidCredentialsError(DomainError):
 | Версия | Дата | Автор | Что изменилось | Статус |
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
-| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R1 обоснование — пример ADR-004 исправлен в 1.1; R7 обоснование — OQ-69 resolved; R18 субъект анонима — cookie `flt_anon_session` (OQ-77); R13 проверка — права администратора в формате SYS-06; R19 путь теста N3 `tests/n_instances/core/`; R30 порядок локали: профиль → cookie `flt_ui_language` → `Accept-Language` → `ru`; раздел 9 — статусы OQ-25, OQ-69, OQ-70, добавлен OQ-77 | draft |
+| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R1 обоснование — пример ADR-004 исправлен в 1.1; R7 обоснование — OQ-69 resolved; R18 субъект анонима — cookie `flt_anon_session` (OQ-77); R13 проверка — права администратора в формате SYS-06; R19 путь теста N3 `tests/n_instances/core/`; R30 порядок локали: профиль → cookie `flt_ui_language` → `Accept-Language` → `ru`; раздел 9 — статусы OQ-25, OQ-69, OQ-70, добавлен OQ-77; `provider-connections` → `provider-bindings` в таблице исключений (термин SYS-08, ADR-009) | draft |
