@@ -52,6 +52,8 @@ target/
 # PyInstaller
 *.manifest
 *.spec
+# спецификация сборки агента коммитится (ADR-008)
+!src/agent/flt-agent.spec
 
 # Виртуальные окружения
 .venv
