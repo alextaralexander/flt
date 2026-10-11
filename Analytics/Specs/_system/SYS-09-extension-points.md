@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | draft |
-| Версия | 0.2 |
+| Статус | approved |
+| Версия | 1.0 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-11 (PR #3) |
 | Пункт(ы) BRD | STU-25, STU-30, STU-31, ADM-04 (плагины, этап 7 — здесь закладываются интерфейсы); STU-01–STU-05 (провайдеры LLM), STU-08–STU-11 (реестр языков), STU-13, STU-28 (провайдеры речи), STU-20–STU-23 (типы заданий, экзамены) |
 | Модуль | shared kernel (`app/core/extensions`), app_shell (`src/lib/extension-points`), владельцы точек: `languages`, `llm_gateway`, `speech`, `lessons`, `assessment`; все модули — через `ModuleDefinition.extension_points` |
 | Зависимости | ADR-002 (`ModuleDefinition`, подпакет `public`, import-linter), ADR-004 (декларации топиков `public/topics.py`, контейнер зависимостей), ADR-005 (зоны ESLint, запрет barrel-файлов), SYS-08 (интерфейсы `LLMProvider`, `EmbeddingsProvider`, провайдеры речи) |
@@ -442,3 +442,4 @@ LESSON_MESSAGE_SENT = TopicDeclaration(
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R7 — контракт точки `llm_gateway.providers` — `ProviderKindInfo` с фабрикой адаптера `LLMProvider`, сигнатуры совпадают с SYS-08-R2, R4 (`stream_completion`, `kind`, без параметра подключения); R9 — сигнатуры `STTProvider`/`TTSProvider` по SYS-08-R22; R12 — смысл `visibility` согласован с SYS-04-R21 (`public` — другие модули и плагины); примеры 2 и 4 — `public/providers.py`, вклад `local` и выбор вида в сервисе `llm_gateway` вместо `lessons`, `public/topics.py` и поля `TopicDeclaration` по SYS-04; пример манифеста — право в формате SYS-06 `lessons:lessons:read`; путь теста реестра провайдеров — `tests/modules/llm_gateway/unit/` (раскладка SYS-10) | draft |
+| 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
