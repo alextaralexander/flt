@@ -1,4 +1,5 @@
-import Axios, { InternalAxiosRequestConfig } from 'axios';
+import type { InternalAxiosRequestConfig } from 'axios';
+import Axios from 'axios';
 
 import { useNotifications } from '@/components/ui/notifications';
 import { env } from '@/config/env';

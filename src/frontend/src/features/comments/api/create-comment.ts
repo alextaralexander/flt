@@ -2,8 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
 import { api } from '@/lib/api-client';
-import { MutationConfig } from '@/lib/react-query';
-import { Comment } from '@/types/api';
+import type { MutationConfig } from '@/lib/react-query';
+import type { Comment } from '@/types/api';
 
 import { getInfiniteCommentsQueryOptions } from './get-comments';
 

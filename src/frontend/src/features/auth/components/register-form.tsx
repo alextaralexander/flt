@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Form, Input, Select, Label, Switch } from '@/components/ui/form';
 import { paths } from '@/config/paths';
 import { useRegister, registerInputSchema } from '@/lib/auth';
-import { Team } from '@/types/api';
+import type { Team } from '@/types/api';
 
 type RegisterFormProps = {
   onSuccess: () => void;

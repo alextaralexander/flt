@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 
 import { ContentLayout } from '@/components/layouts';
 import { getUsersQueryOptions } from '@/features/users/api/get-users';

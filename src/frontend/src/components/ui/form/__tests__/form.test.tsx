@@ -1,4 +1,4 @@
-import { SubmitHandler } from 'react-hook-form';
+import type { SubmitHandler } from 'react-hook-form';
 import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';

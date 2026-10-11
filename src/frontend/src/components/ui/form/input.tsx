@@ -3,7 +3,8 @@ import { type UseFormRegisterReturn } from 'react-hook-form';
 
 import { cn } from '@/utils/cn';
 
-import { FieldWrapper, FieldWrapperPassThroughProps } from './field-wrapper';
+import type { FieldWrapperPassThroughProps } from './field-wrapper';
+import { FieldWrapper } from './field-wrapper';
 
 export type InputProps = React.InputHTMLAttributes<HTMLInputElement> &
   FieldWrapperPassThroughProps & {

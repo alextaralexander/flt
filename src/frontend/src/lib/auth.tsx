@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router';
 import { z } from 'zod';
 
 import { paths } from '@/config/paths';
-import { AuthResponse, User } from '@/types/api';
+import type { AuthResponse, User } from '@/types/api';
 
 import { api } from './api-client';
 

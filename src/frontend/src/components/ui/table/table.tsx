@@ -1,10 +1,11 @@
 import { ArchiveX } from 'lucide-react';
 import * as React from 'react';
 
-import { BaseEntity } from '@/types/api';
+import type { BaseEntity } from '@/types/api';
 import { cn } from '@/utils/cn';
 
-import { TablePagination, TablePaginationProps } from './pagination';
+import type { TablePaginationProps } from './pagination';
+import { TablePagination } from './pagination';
 
 const TableElement = React.forwardRef<
   HTMLTableElement,
