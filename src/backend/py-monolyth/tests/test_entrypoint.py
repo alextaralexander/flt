@@ -102,6 +102,29 @@ class TestRoles:
         assert code == 0
         assert uvicorn_calls == []
 
+    @pytest.mark.req("SYS-04-R23")
+    def test_migrate_applies_module_topics(
+        self, monkeypatch: pytest.MonkeyPatch, uvicorn_calls: list[tuple[Any, dict[str, Any]]]
+    ) -> None:
+        """Роль `migrate` после миграций создаёт топики по декларациям модулей реестра."""
+        # - Arrange -
+        applied: list[list[Any]] = []
+
+        async def fake_apply(declarations: Any) -> list[str]:
+            applied.append(list(declarations))
+            return []
+
+        monkeypatch.setattr(entrypoint.command, "upgrade", lambda config, revision: None)
+        monkeypatch.setattr(entrypoint, "apply_topics", fake_apply)
+        _use_role(monkeypatch, AppRole.MIGRATE)
+
+        # - Act -
+        code = entrypoint.main([])
+
+        # - Assert -
+        assert code == 0
+        assert applied == [[]]
+
     def test_media_agent_is_not_available_yet(
         self, monkeypatch: pytest.MonkeyPatch, uvicorn_calls: list[tuple[Any, dict[str, Any]]]
     ) -> None:

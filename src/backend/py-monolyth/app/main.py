@@ -13,6 +13,7 @@
 симметрично в lifespan. Процесс по роли запускает `python -m app` (`app/__main__.py`).
 """
 
+import asyncio
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
 
@@ -21,8 +22,10 @@ from faststream.asgi import AsgiFastStream
 from opentelemetry.sdk.trace import TracerProvider
 from starlette.middleware.cors import CORSMiddleware
 
+from app.core.container import container
+from app.core.dao.caching import ModuleRedis
 from app.core.dao.caching.redis_conn import close_redis_client
-from app.core.dao.db_helpers.db_connection import dispose_engine, get_engine
+from app.core.dao.db_helpers.db_connection import dispose_engine, get_engine, get_session_maker
 from app.core.http.body_limit import BodyLimitMiddleware
 from app.core.http.context import RequestContextMiddleware
 from app.core.http.deprecation import DeprecationMiddleware
@@ -31,6 +34,7 @@ from app.core.http.idempotency import IdempotencyMiddleware
 from app.core.http.instance_header import InstanceIdMiddleware
 from app.core.http.logging_middleware import register_logging_middleware
 from app.core.kafka.broker import create_broker
+from app.core.kafka.relay import BrokerSink, OutboxRelay, OutboxSink
 from app.core.logging import logger_settings
 from app.core.metrics.metrics_controller import router as service_router
 from app.core.metrics.metrics_middleware import PrometheusMiddleware
@@ -168,8 +172,31 @@ def create_worker_app(
     """
     logger_settings.setup_logging()
 
-    broker = create_broker(_resolve_modules(modules), role=role)
+    resolved = _resolve_modules(modules)
+    broker = create_broker(resolved, role=role)
     service_app = create_service_app()
+    # Приёмник DLQ консьюмеров и relay outbox — брокер процесса (SYS-04-R24, R27).
+    container.register(OutboxSink, lambda: BrokerSink(broker), replace=True)
+    relay_tasks: list[asyncio.Task[None]] = []
+    relay_stop = asyncio.Event()
+
+    async def start_relays() -> None:
+        """Relay outbox для каждого модуля с outbox — после подключения брокера."""
+        relay_stop.clear()
+        for module in resolved:
+            if module.outbox is None:
+                continue
+            relay = OutboxRelay(
+                module.name, module.outbox, get_session_maker(), BrokerSink(broker), ModuleRedis("shared_kernel")
+            )
+            relay_tasks.append(asyncio.create_task(relay.run(relay_stop), name=f"outbox-relay-{module.name}"))
+
+    async def stop_relays() -> None:
+        """Остановка relay до отключения брокера; незавершённые проходы откатываются транзакцией."""
+        relay_stop.set()
+        await asyncio.gather(*relay_tasks, return_exceptions=True)
+        relay_tasks.clear()
+
     # Провайдер трейсов живёт столько же, сколько приложение (заполняется в on_startup).
     tracer_providers: list[TracerProvider] = []
 
@@ -190,5 +217,7 @@ def create_worker_app(
         asgi_routes=[(path, service_app) for path in WORKER_SERVICE_PATHS],
         asyncapi_path=ASYNCAPI_PATH,
         on_startup=[on_startup] if manage_resources else [],
+        after_startup=[start_relays],
+        on_shutdown=[stop_relays],
         after_shutdown=[after_shutdown] if manage_resources else [],
     )

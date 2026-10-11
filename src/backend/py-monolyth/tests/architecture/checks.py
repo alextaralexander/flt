@@ -973,3 +973,24 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def _decorator_name(node: ast.expr) -> str:
+    """Последний сегмент имени декоратора (`router.subscriber(...)` → `subscriber`)."""
+    target = node.func if isinstance(node, ast.Call) else node
+    dotted = expr_dotted(target) or ""
+    return dotted.split(".")[-1]
+
+
+def non_idempotent_consumer_violations(root: Path) -> list[str]:
+    """Подписчики Kafka модулей (`@<router>.subscriber`) без `@idempotent_consumer` (SYS-04-R26)."""
+    violations = []
+    for path in iter_python_files(root, "app/modules"):
+        rel = rel_path(path, root)
+        for node in walk_in_order(parse_file(path)):
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            names = {_decorator_name(decorator) for decorator in node.decorator_list}
+            if "subscriber" in names and "idempotent_consumer" not in names:
+                violations.append(f"{rel}:{node.lineno}: подписчик {node.name} без @idempotent_consumer")
+    return violations

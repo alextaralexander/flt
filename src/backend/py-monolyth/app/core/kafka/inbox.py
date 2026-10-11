@@ -26,6 +26,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from structlog.contextvars import bound_contextvars
 
+from app.core.container import container
+from app.core.dao.db_helpers.db_connection import get_session_maker
 from app.core.kafka.relay import OutboxSink
 from app.core.logging.context import app_logger
 from app.core.time import Clock
@@ -215,3 +217,34 @@ class IdempotentConsumer:
             error_type=type(exc).__name__,
             attempts=attempts,
         )
+
+
+def idempotent_consumer(consumer: str, table: Table) -> Callable[[Handler], Callable[[KafkaMessage], Awaitable[None]]]:
+    """Декоратор подписчика FastStream модуля: inbox, ретраи и DLQ для обработчика (SYS-04-R26, R27).
+
+    Обработчик модуля принимает `(session, body)`: сессию транзакции с записью inbox и тело
+    сообщения (конверт события или команды как `dict`); схему события он валидирует сам.
+    Сессии берутся из пула процесса, приёмник DLQ — `OutboxSink` из контейнера (регистрирует
+    роль `worker`). Исходное сообщение подтверждается после фиксации транзакции или записи в DLQ.
+
+    Args:
+        consumer: Имя консьюмера `<module>.<handler>`; совпадает с хвостом `group_id`.
+        table: Таблица `processed_events` модуля.
+
+    Returns:
+        Декоратор, превращающий обработчик модуля в подписчика `(message: KafkaMessage)`.
+    """
+
+    def decorate(handler: Handler) -> Callable[[KafkaMessage], Awaitable[None]]:
+        """Оборачивает обработчик; сигнатуру обёртки FastStream разбирает для DI."""
+
+        async def subscriber(message: KafkaMessage) -> None:
+            processor = IdempotentConsumer(consumer, table, get_session_maker(), container.resolve(OutboxSink))
+            await processor.handle(ConsumedMessage.from_kafka(message), handler)
+
+        subscriber.__name__ = getattr(handler, "__name__", "subscriber")
+        subscriber.__qualname__ = getattr(handler, "__qualname__", subscriber.__name__)
+        subscriber.__doc__ = handler.__doc__
+        return subscriber
+
+    return decorate

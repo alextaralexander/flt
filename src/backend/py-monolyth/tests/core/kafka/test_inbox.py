@@ -10,9 +10,11 @@ from pydantic import BaseModel
 from sqlalchemy import Table, func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core.container import container
 from app.core.ids import new_id
 from app.core.kafka.broker import create_broker
-from app.core.kafka.inbox import ConsumedMessage, IdempotentConsumer, NonRetryableError, Outcome
+from app.core.kafka.inbox import ConsumedMessage, IdempotentConsumer, NonRetryableError, Outcome, idempotent_consumer
+from app.core.kafka.relay import OutboxSink
 from tests.core.kafka.conftest import OUTBOX_SCHEMA
 
 
@@ -234,3 +236,32 @@ async def test_consumed_message_from_kafka_subscriber(
     consumed = collected[0]
     assert (consumed.topic, consumed.key, consumed.headers["event_id"]) == (TOPIC, "agg-1", "e1")
     assert json.loads(consumed.value) == {"payload": {"n": 1}}
+
+
+@pytest.mark.req("SYS-04-R26")
+async def test_decorated_subscriber_processes_redelivery_once(
+    inbox: Table, outbox: Table, session_maker: async_sessionmaker[AsyncSession]
+) -> None:
+    """`@idempotent_consumer` поверх подписчика FastStream: повторная доставка того же `event_id` — один вызов."""
+    # - Arrange -
+    broker = create_broker()
+    calls: list[dict[str, Any]] = []
+    sink = RecordingSink()
+
+    @broker.subscriber(TOPIC, group_id=f"flt.{OUTBOX_SCHEMA}.handle")
+    @idempotent_consumer("core_outbox_test.handle", inbox)
+    async def handle(session: AsyncSession, body: dict[str, Any]) -> None:
+        """Обработчик модуля."""
+        calls.append(body)
+
+    headers = {"event_id": str(new_id()), "request_id": str(new_id())}
+
+    # - Act -
+    with container.override(OutboxSink, sink):
+        async with TestKafkaBroker(broker):
+            for _ in range(2):
+                await broker.publish(b'{"payload": {"n": 1}}', TOPIC, key=b"agg-1", headers=headers)
+
+    # - Assert -
+    assert calls == [{"payload": {"n": 1}}]
+    assert sink.sent == []
