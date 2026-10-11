@@ -36,6 +36,7 @@ from cli.naming import (
 ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_PATH = "app/modules/registry.py"
 ALEMBIC_INI_PATH = "alembic.ini"
+IMPORTLINTER_PATH = ".importlinter"
 STANDS = ("local", "dev", "test", "prod")
 
 app = typer.Typer(
@@ -152,6 +153,47 @@ def _write_registry(modules: tuple[str, ...], dry_run: bool) -> None:
     typer.secho(f"  ~ обновлён: {REGISTRY_PATH}", fg=typer.colors.GREEN)
 
 
+def render_importlinter_modules(modules: tuple[str, ...]) -> str:
+    """Текст контрактов 1–3 `.importlinter` для модулей реестра (пусто, если модулей нет)."""
+    if not modules:
+        return ""
+
+    def as_list(names: list[str]) -> str:
+        """Значения многострочного параметра ini с отступом."""
+        return "\n".join(f"    {name}" for name in names)
+
+    return templates.render(
+        templates.IMPORTLINTER_MODULE_CONTRACTS,
+        MODULES_LIST=as_list([f"app.modules.{name}" for name in modules]),
+        LAYERS_LIST=as_list(list(reversed(modules))),
+        CONTAINERS_LIST=as_list([f"app.modules.{name}" for name in modules]),
+    )
+
+
+def _write_importlinter(modules: tuple[str, ...], dry_run: bool) -> None:
+    """Перегенерировать блок контрактов модулей в `.importlinter` между маркерами.
+
+    Raises:
+        typer.Exit: в файле нет маркеров блока модулей.
+    """
+    path = ROOT / IMPORTLINTER_PATH
+    text = path.read_text(encoding="utf-8")
+    begin, end = text.find(templates.IMPORTLINTER_BEGIN), text.find(templates.IMPORTLINTER_END)
+    if begin == -1 or end == -1 or end < begin:
+        typer.secho(f"  ! в {IMPORTLINTER_PATH} нет маркеров блока модулей", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    head = text[: begin + len(templates.IMPORTLINTER_BEGIN)]
+    new_text = head + "\n" + render_importlinter_modules(modules) + text[end:]
+    if new_text == text:
+        typer.secho(f"  = пропуск (без изменений): {IMPORTLINTER_PATH}", fg=typer.colors.YELLOW)
+        return
+    if dry_run:
+        typer.secho(f"  ~ [dry-run] обновил бы: {IMPORTLINTER_PATH}", fg=typer.colors.CYAN)
+        return
+    path.write_text(new_text, encoding="utf-8")
+    typer.secho(f"  ~ обновлён: {IMPORTLINTER_PATH}", fg=typer.colors.GREEN)
+
+
 def _module_tokens(module: str) -> dict[str, str]:
     """Токены шаблонов для имени модуля."""
     return {
@@ -185,7 +227,7 @@ def add_module(
     name: str = typer.Argument(..., help="Имя модуля в snake_case, напр. identity или llm_gateway."),
     dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Только показать, что будет сделано."),
 ) -> None:
-    """Создать доменный модуль app/modules/<name> и зарегистрировать его (реестр, alembic.ini, envs, тесты)."""
+    """Создать модуль app/modules/<name> и зарегистрировать его (реестр, .importlinter, alembic.ini, envs, тесты)."""
     if not is_valid_module_name(name):
         typer.secho(f"  ! недопустимое имя модуля: {name!r} (snake_case, не зарезервировано)", fg=typer.colors.RED)
         raise typer.Exit(code=1)
@@ -219,7 +261,9 @@ def add_module(
     if name in modules:
         typer.secho(f"  = пропуск (уже в реестре): {REGISTRY_PATH}", fg=typer.colors.YELLOW)
     else:
-        _write_registry((*modules, name), dry_run)
+        modules = (*modules, name)
+        _write_registry(modules, dry_run)
+    _write_importlinter(modules, dry_run)
 
     _append_file(
         ALEMBIC_INI_PATH,
@@ -323,7 +367,8 @@ def add_subscriber(
         f"{base}/brokers/subscribers.py": templates.BROKERS_SUBSCRIBERS,
         f"{base}/brokers/messages/__init__.py": templates.BROKERS_MESSAGES_INIT,
         f"{base}/brokers/messages/{snake}_message.py": templates.SUBSCRIBER_SCHEMA,
-        f"{base}/services/{snake}_message_service.py": templates.SUBSCRIBER_SERVICE,
+        f"{base}/brokers/services/__init__.py": templates.BROKERS_SERVICES_INIT,
+        f"{base}/brokers/services/{snake}_service.py": templates.SUBSCRIBER_SERVICE,
     }
     for rel_path, template in files.items():
         _create_file(rel_path, templates.render(template, **tokens), dry_run)
@@ -365,7 +410,7 @@ def add_subscriber(
     _format([*files, f"{base}/module.py"], dry_run)
 
     typer.secho("\nСледующие шаги:", bold=True)
-    typer.echo(f"  1. Реализуй бизнес-логику в {base}/services/{snake}_message_service.py")
+    typer.echo(f"  1. Реализуй обработку в {base}/brokers/services/{snake}_service.py (данные — через services/)")
     typer.echo(f"  2. Уточни payload в {base}/brokers/messages/{snake}_message.py")
     typer.echo(f"  3. Добавь тест в tests/modules/{module}/brokers/ (TestKafkaBroker)")
     typer.echo("  4. make check\n")

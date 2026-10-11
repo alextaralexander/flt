@@ -65,6 +65,8 @@ dev = [
     # Линт + форматирование (один инструмент вместо black/isort/autoflake/flake8)
     "ruff>=0.9",
     "mypy>=1.17,<2",
+    # Границы модулей (ADR-002): контракты в .importlinter, запуск — `make arch`
+    "import-linter>=2.3,<3",
     "pre-commit>=4.1,<5",
     # Тесты
     "pytest>=8.3,<9",

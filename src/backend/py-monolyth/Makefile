@@ -12,7 +12,7 @@ COMPOSE_INFRA ?= postgres redis kafka
 PY_MAIN_LIB ?= ../py-main-lib
 
 .DEFAULT_GOAL := help
-.PHONY: help install dev run test test-cov test-docker format format-check lint lint-fix typecheck \
+.PHONY: help install dev run test test-cov test-docker format format-check lint lint-fix typecheck arch \
         security secrets-scan check migrate makemigration migrate-downgrade asyncapi \
         scaffold-module scaffold-entity scaffold-subscriber list-modules lock pre-commit \
         compose-up compose-down docker-build clean
@@ -56,6 +56,10 @@ lint-fix: ## Линт с автоисправлениями
 typecheck: ## Проверка типов (mypy strict)
 	$(RUN) mypy app cli configs
 
+arch: ## Границы модулей: import-linter по .importlinter (+ tests/architecture, когда появятся — Г.2)
+	$(RUN) lint-imports
+	@if [ -d tests/architecture ]; then $(RUN) pytest tests/architecture -p no:cacheprovider; fi
+
 # --- Безопасность (G6) ------------------------------------------------------
 
 security: ## Security-анализ: bandit + detect-secrets
@@ -87,8 +91,9 @@ test-docker: ## Тесты в одноразовом Postgres (docker run), бе
 
 # --- Полная проверка (Definition of Done) ----------------------------------
 
-# format мутирующий: агенту/разработчику дешевле автоформат, чем цикл «отказ → make format → повтор».
-check: format lint typecheck security test ## Полная проверка перед коммитом (DoD)
+# format мутирующий: агенту/разработчику дешевле автоформат, чем цикл «отказ → make format → повтор»;
+# CI вызывает немутирующий format-check и остальные цели по отдельности (ADR-011).
+check: format lint typecheck arch security test-cov ## Полная проверка перед коммитом (DoD)
 
 pre-commit: ## Прогнать pre-commit на всех файлах
 	$(RUN) pre-commit run --all-files

@@ -26,10 +26,11 @@ STANDS = ("local", "dev", "test", "prod")
 pytestmark = pytest.mark.no_db
 
 
-def _run(tree: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    """Запустить команду в копии дерева тем же интерпретатором (аргументы фиксированы тестом)."""
+def _run(tree: Path, *args: str, check: bool = True, tool: str | None = None) -> subprocess.CompletedProcess[str]:
+    """Запустить команду в копии дерева (интерпретатор или консольный скрипт venv; аргументы фиксированы тестом)."""
+    command = [str(Path(sys.executable).parent / tool), *args] if tool else [sys.executable, *args]
     result = subprocess.run(  # nosec B603
-        [sys.executable, *args],
+        command,
         cwd=tree,
         capture_output=True,
         text=True,
@@ -54,6 +55,8 @@ def scaffolded_tree(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
 
     _run(tree, "-m", "cli", "add-module", MODULE)
     _run(tree, "-m", "cli", "add-entity", "OrderItem", "--module", MODULE)
+    # Модуль без Kafka-слоя (brokers/) тоже проходит контракты границ.
+    _run(tree, tool="lint-imports")
     _run(tree, "-m", "cli", "add-subscriber", "ORDER_PLACED", TOPIC, "--module", MODULE)
     yield tree
 
@@ -95,6 +98,7 @@ class TestScaffoldedModule:
         watched = [
             scaffolded_tree / "app" / "modules" / "registry.py",
             scaffolded_tree / "alembic.ini",
+            scaffolded_tree / ".importlinter",
             scaffolded_tree / "app" / "modules" / MODULE / "module.py",
             scaffolded_tree / "app" / "modules" / MODULE / "api" / "router.py",
             scaffolded_tree / "app" / "modules" / MODULE / "brokers" / "subscribers.py",
@@ -147,6 +151,15 @@ class TestScaffoldedCodeQuality:
         # - Act / Assert -
         _run(scaffolded_tree, "-m", "ruff", "check", ".")
         _run(scaffolded_tree, "-m", "ruff", "format", "--check", ".")
+
+    def test_import_linter_contracts(self, scaffolded_tree: Path) -> None:
+        """Контракты границ `.importlinter` (с блоком нового модуля) выполняются."""
+        # - Act -
+        result = _run(scaffolded_tree, tool="lint-imports")
+
+        # - Assert -
+        assert "modules-public-api-only" in (scaffolded_tree / ".importlinter").read_text(encoding="utf-8")
+        assert "0 broken" in result.stdout
 
     def test_mypy_strict(self, scaffolded_tree: Path) -> None:
         """Проверка mypy strict проходит на app, cli, configs с новым модулем."""
