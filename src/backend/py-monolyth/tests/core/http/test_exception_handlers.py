@@ -1,17 +1,17 @@
-"""Тесты exception handler-ов HTTP-слоя."""
+"""Тесты exception handler-ов HTTP-слоя: ошибки boilerplate в конверте `ErrorResponseV1` (SYS-03-R7, R8)."""
 
 from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
-from py_main_lib.services.schemas.v1_schemas import ErrorResponseV1
 
 from app.core.exceptions import (
     InsufficientPermissionsError,
     InvalidTokenError,
     ModelNotFoundInDatabaseError,
 )
+from app.core.http.schemas import ErrorResponseV1
 from app.core.security.schemas import UserSecuritySchema
 from configs.settings import settings
 from tests.conftest import mocked_function
@@ -43,8 +43,8 @@ class TestExceptionHandlers:
 
         Проверки:
         - Корректный статус код.
-        - Корректный message_mnemo_code.
-        - Корректные параметры ошибки.
+        - Код `core.not_found`.
+        - Детали не раскрывают, существует ли объект (SYS-03-R22).
         """
         # - Arrange -
         param_model_id = str(uuid4())
@@ -62,10 +62,9 @@ class TestExceptionHandlers:
         # - Assert -
         response_schema = ErrorResponseV1(**response.json())
         assert response.status_code == 404
-        # todo после правильного импорта в py-lib, следует убрать кавычки и обращаться как к аргументу
-        assert response_schema.messages.ERROR[0]["message_mnemo_code"] == "MODEL_NOT_FOUND_IN_DATABASE_ERROR"
-        assert response_schema.messages.ERROR[0]["parameters"]["model_id"] == param_model_id
-        assert response_schema.messages.ERROR[0]["parameters"]["model_name"] == param_model.__name__
+        assert response_schema.messages.ERROR[0].code == "core.not_found"
+        assert response_schema.messages.ERROR[0].details == {}
+        assert param_model_id not in response.text
 
     async def test_model_not_found_hides_is_deleted_without_debug_mode(
         self,
@@ -77,7 +76,6 @@ class TestExceptionHandlers:
 
         Проверки:
         - Параметр `is_deleted` скрыт из ответа.
-        - Остальные параметры на месте.
         """
         # - Arrange -
         monkeypatch.setattr(settings, "DEBUG_MODE", False)
@@ -92,10 +90,9 @@ class TestExceptionHandlers:
         response = await client.get("/mocked_endpoint")
 
         # - Assert -
-        parameters = response.json()["messages"]["ERROR"][0]["parameters"]
+        details = response.json()["messages"]["ERROR"][0]["details"]
         assert response.status_code == 404
-        assert "is_deleted" not in parameters
-        assert "model_id" in parameters
+        assert "is_deleted" not in details
 
     async def test_insufficient_permission_error_handler(
         self,
@@ -107,7 +104,7 @@ class TestExceptionHandlers:
 
         Проверки:
         - Корректный статус код.
-        - Корректный message_mnemo_code.
+        - Код `core.forbidden`.
         """
 
         # - Arrange -
@@ -123,8 +120,7 @@ class TestExceptionHandlers:
         # - Assert -
         response_schema = ErrorResponseV1(**response.json())
         assert response.status_code == 403
-        # todo после правильного импорта в py-lib, следует убрать кавычки и обращаться как к аргументу
-        assert response_schema.messages.ERROR[0]["message_mnemo_code"] == "INSUFFICIENT_PERMISSIONS_ERROR"
+        assert response_schema.messages.ERROR[0].code == "core.forbidden"
 
     async def test_invalid_token_error_handler(
         self,
@@ -135,7 +131,7 @@ class TestExceptionHandlers:
 
         Проверки:
         - Корректный статус код (401).
-        - Корректный message_mnemo_code.
+        - Код `core.unauthenticated` и заголовок `WWW-Authenticate: Bearer`.
         """
 
         # - Arrange -
@@ -150,7 +146,8 @@ class TestExceptionHandlers:
 
         # - Assert -
         assert response.status_code == 401
-        assert response.json()["messages"]["ERROR"][0]["message_mnemo_code"] == "INVALID_TOKEN"
+        assert response.json()["messages"]["ERROR"][0]["code"] == "core.unauthenticated"
+        assert response.headers["WWW-Authenticate"] == "Bearer"
 
     async def test_request_validation_error_uses_error_envelope(
         self,
@@ -160,8 +157,8 @@ class TestExceptionHandlers:
 
         Проверки:
         - Корректный статус код (422).
-        - Мнемокод REQUEST_VALIDATION_ERROR.
-        - Детали валидации присутствуют в parameters.errors.
+        - Код `core.validation_failed`.
+        - Детали валидации присутствуют в details.errors.
         """
         # - Act -
         response = await client.post("/mocked_body", json={})
@@ -169,8 +166,8 @@ class TestExceptionHandlers:
         # - Assert -
         error = response.json()["messages"]["ERROR"][0]
         assert response.status_code == 422
-        assert error["message_mnemo_code"] == "REQUEST_VALIDATION_ERROR"
-        assert error["parameters"]["errors"]
+        assert error["code"] == "core.validation_failed"
+        assert error["details"]["errors"]
 
     async def test_http_exception_uses_error_envelope(
         self,
@@ -180,7 +177,7 @@ class TestExceptionHandlers:
 
         Проверки:
         - Корректный статус код (404).
-        - Мнемокод HTTP_ERROR и detail в параметрах.
+        - Код `core.not_found`.
         """
         # - Act -
         response = await client.get("/route/that/does/not/exist")
@@ -188,5 +185,4 @@ class TestExceptionHandlers:
         # - Assert -
         error = response.json()["messages"]["ERROR"][0]
         assert response.status_code == 404
-        assert error["message_mnemo_code"] == "HTTP_ERROR"
-        assert error["parameters"]["detail"] == "Not Found"
+        assert error["code"] == "core.not_found"

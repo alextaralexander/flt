@@ -6,11 +6,11 @@ from typing import Any, cast
 
 import structlog
 from fastapi import FastAPI, Request, Response
-from py_main_lib.services.schemas.v1_schemas import ErrorResponseV1, MessagesV1
 from starlette.responses import JSONResponse
 from uvicorn.protocols.utils import get_path_with_query_string
 
-from app.core.schemas import ErrorMessageSchema, InternalServerErrorMessageSchema
+from app.core.http.errors import InternalError
+from app.core.http.exception_handlers import error_envelope
 from configs.settings import settings
 
 
@@ -20,17 +20,14 @@ EXCLUDED_ACCESS_LOG_PATHS = frozenset({"/v1/health", "/v1/ready", "/v1/metrics"}
 
 
 def _build_internal_error_response(exception_info: Exception) -> JSONResponse:
-    """500 в едином конверте `ErrorResponseV1`; traceback — только в DEBUG_MODE."""
+    """500 `core.internal` в едином конверте `ErrorResponseV1`; traceback — только в DEBUG_MODE (SYS-03-R8)."""
+    details: dict[str, Any] = {}
     if settings.DEBUG_MODE:
-        error_message: Any = InternalServerErrorMessageSchema(
-            log_message=str(exception_info).splitlines(),
-            traceback=traceback.format_exception(type(exception_info), exception_info, exception_info.__traceback__),
-        )
-    else:
-        error_message = ErrorMessageSchema(message_mnemo_code="INTERNAL_SERVER_ERROR", parameters={})
-
-    error_response_content = ErrorResponseV1(messages=MessagesV1(ERROR=[error_message])).model_dump()
-    return JSONResponse(status_code=500, content=error_response_content)
+        details = {
+            "log_message": str(exception_info).splitlines(),
+            "traceback": traceback.format_exception(type(exception_info), exception_info, exception_info.__traceback__),
+        }
+    return error_envelope(500, InternalError.code, InternalError.message, details)
 
 
 def register_logging_middleware(app: FastAPI) -> None:
