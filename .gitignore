@@ -180,6 +180,11 @@ lerna-debug.log*
 !.env.example-e2e
 .envrc
 .pypirc
+# Ключи и сертификаты (ADR-012, ADR-013): TLS-сертификаты HAProxy и ключи подписи
+# создаются на стенде и никогда не коммитятся
+*.pem
+*.key
+deploy/**/certs/
 
 # Логи и pid-файлы
 *.log
