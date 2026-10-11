@@ -1,3 +1,4 @@
+import i18next from 'i18next';
 import type { Mock } from 'vitest';
 
 import { createDiscussion } from '@/testing/data-generators';
@@ -28,7 +29,9 @@ test(
 
     const newDiscussion = createDiscussion();
 
-    expect(await screen.findByText(/no entries/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(i18next.t('ui.table.empty')),
+    ).toBeInTheDocument();
 
     await userEvent.click(
       screen.getByRole('button', { name: /create discussion/i }),

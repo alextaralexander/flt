@@ -1,11 +1,14 @@
-import * as React from 'react';
 import { Link, useSearchParams } from 'react-router';
 
-import { Button } from '@/components/ui/button';
-import { Form, Input, Select, Label, Switch } from '@/components/ui/form';
+import { Button } from '@/components/ui/button/button';
+import { Form } from '@/components/ui/form/form';
+import { Input } from '@/components/ui/form/input';
+import { Label } from '@/components/ui/form/label';
+import { Select } from '@/components/ui/form/select';
+import { Switch } from '@/components/ui/form/switch';
 import { paths } from '@/config/paths';
 import { useRegister, registerInputSchema } from '@/lib/auth';
-import { Team } from '@/types/api';
+import type { Team } from '@/types/api';
 
 type RegisterFormProps = {
   onSuccess: () => void;
@@ -68,7 +71,7 @@ export const RegisterForm = ({
                 onCheckedChange={setChooseTeam}
                 className={`${
                   chooseTeam ? 'bg-blue-600' : 'bg-gray-200'
-                } relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2`}
+                } relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 focus:outline-hidden`}
                 id="choose-team"
               />
               <Label htmlFor="airplane-mode">Join Existing Team</Label>

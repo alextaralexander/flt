@@ -1,4 +1,4 @@
-import { ContentLayout } from '@/components/layouts';
+import { ContentLayout } from '@/components/layouts/content-layout';
 import { useUser } from '@/lib/auth';
 import { ROLES } from '@/lib/authorization';
 

@@ -1,23 +1,17 @@
-import {
-  randCompanyName,
-  randUserName,
-  randEmail,
-  randParagraph,
-  randUuid,
-  randPassword,
-  randCatchPhrase,
-} from '@ngneat/falso';
+// Генераторы тестовых данных на @faker-js/faker (ADR-005, 3.1: faker заменяет
+// @ngneat/falso, на нём же строятся моки orval).
+import { faker } from '@faker-js/faker';
 
 const generateUser = () => ({
-  id: randUuid() + Math.random(),
-  firstName: randUserName({ withAccents: false }),
-  lastName: randUserName({ withAccents: false }),
-  email: randEmail(),
-  password: randPassword(),
-  teamId: randUuid(),
-  teamName: randCompanyName(),
+  id: faker.string.uuid() + Math.random(),
+  firstName: faker.internet.username().replace(/[^A-Za-z0-9]/g, ''),
+  lastName: faker.internet.username().replace(/[^A-Za-z0-9]/g, ''),
+  email: faker.internet.email(),
+  password: faker.internet.password({ length: 12 }),
+  teamId: faker.string.uuid(),
+  teamName: faker.company.name(),
   role: 'ADMIN',
-  bio: randParagraph(),
+  bio: faker.lorem.paragraph(),
   createdAt: Date.now(),
 });
 
@@ -28,9 +22,9 @@ export const createUser = <T extends Partial<ReturnType<typeof generateUser>>>(
 };
 
 const generateTeam = () => ({
-  id: randUuid(),
-  name: randCompanyName(),
-  description: randParagraph(),
+  id: faker.string.uuid(),
+  name: faker.company.name(),
+  description: faker.lorem.paragraph(),
   createdAt: Date.now(),
 });
 
@@ -41,9 +35,9 @@ export const createTeam = <T extends Partial<ReturnType<typeof generateTeam>>>(
 };
 
 const generateDiscussion = () => ({
-  id: randUuid(),
-  title: randCatchPhrase(),
-  body: randParagraph(),
+  id: faker.string.uuid(),
+  title: faker.company.catchPhrase(),
+  body: faker.lorem.paragraph(),
   createdAt: Date.now(),
 });
 
@@ -59,8 +53,8 @@ export const createDiscussion = <
 };
 
 const generateComment = () => ({
-  id: randUuid(),
-  body: randParagraph(),
+  id: faker.string.uuid(),
+  body: faker.lorem.paragraph(),
   createdAt: Date.now(),
 });
 

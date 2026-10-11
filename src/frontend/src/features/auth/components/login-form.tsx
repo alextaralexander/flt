@@ -1,7 +1,8 @@
 import { Link, useSearchParams } from 'react-router';
 
-import { Button } from '@/components/ui/button';
-import { Form, Input } from '@/components/ui/form';
+import { Button } from '@/components/ui/button/button';
+import { Form } from '@/components/ui/form/form';
+import { Input } from '@/components/ui/form/input';
 import { paths } from '@/config/paths';
 import { useLogin, loginInputSchema } from '@/lib/auth';
 

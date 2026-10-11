@@ -1,5 +1,5 @@
-import { MDPreview } from '@/components/ui/md-preview';
-import { Spinner } from '@/components/ui/spinner';
+import { MDPreview } from '@/components/ui/md-preview/md-preview';
+import { Spinner } from '@/components/ui/spinner/spinner';
 import { formatDate } from '@/utils/format';
 
 import { useDiscussion } from '../api/get-discussion';
@@ -28,7 +28,7 @@ export const DiscussionView = ({ discussionId }: { discussionId: string }) => {
         {formatDate(discussion.createdAt)}
       </span>
       {discussion.author && (
-        <span className="ml-2 text-sm font-bold">
+        <span className="ms-2 text-sm font-bold">
           by {discussion.author.firstName} {discussion.author.lastName}
         </span>
       )}
@@ -37,7 +37,7 @@ export const DiscussionView = ({ discussionId }: { discussionId: string }) => {
           <UpdateDiscussion discussionId={discussionId} />
         </div>
         <div>
-          <div className="overflow-hidden bg-white shadow sm:rounded-lg">
+          <div className="overflow-hidden bg-white shadow-sm sm:rounded-lg">
             <div className="px-4 py-5 sm:px-6">
               <div className="mt-1 max-w-2xl text-sm text-gray-500">
                 <MDPreview value={discussion.body} />

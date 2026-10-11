@@ -1,4 +1,6 @@
-import { Button } from '@/components/ui/button';
+import i18next from 'i18next';
+
+import { Button } from '@/components/ui/button/button';
 import { rtlRender, screen, userEvent, waitFor } from '@/testing/test-utils';
 
 import { ConfirmationDialog } from '../confirmation-dialog';
@@ -27,7 +29,9 @@ test('should handle confirmation flow', async () => {
 
   expect(screen.getByText(bodyText)).toBeInTheDocument();
 
-  await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await userEvent.click(
+    screen.getByRole('button', { name: i18next.t('ui.cancel') }),
+  );
 
   await waitFor(() =>
     expect(screen.queryByText(titleText)).not.toBeInTheDocument(),

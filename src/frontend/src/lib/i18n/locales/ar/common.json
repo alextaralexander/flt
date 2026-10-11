@@ -1,0 +1,58 @@
+{
+  "app": {
+    "name": "FLT"
+  },
+  "errors": {
+    "app": {
+      "network": "لا يوجد اتصال بالخادم",
+      "refresh": "تحديث الصفحة",
+      "request-failed": "تعذّر تنفيذ الطلب",
+      "request-id": "رمز الطلب: {{id}}",
+      "request-title": "خطأ",
+      "title": "حدث خطأ ما",
+      "too-large": "الملف أو الطلب كبير جدًا",
+      "too-many-requests": "طلبات كثيرة جدًا، حاول لاحقًا",
+      "unavailable": "الخدمة غير متاحة مؤقتًا"
+    }
+  },
+  "language": {
+    "native": {
+      "ar": "العربية",
+      "en": "English",
+      "ru": "Русский"
+    },
+    "switcher": {
+      "label": "لغة الواجهة"
+    }
+  },
+  "layout": {
+    "logo-alt": "الشعار",
+    "nav": {
+      "dashboard": "لوحة التحكم",
+      "discussions": "المناقشات",
+      "users": "المستخدمون"
+    },
+    "toggle-menu": "فتح القائمة",
+    "user-menu": {
+      "open": "فتح قائمة المستخدم",
+      "profile": "الملف الشخصي",
+      "sign-out": "تسجيل الخروج"
+    }
+  },
+  "ui": {
+    "cancel": "إلغاء",
+    "close": "إغلاق",
+    "loading": "جارٍ التحميل",
+    "pagination": {
+      "label": "الصفحات",
+      "more": "صفحات أخرى",
+      "next": "التالي",
+      "next-label": "الانتقال إلى الصفحة التالية",
+      "previous": "السابق",
+      "previous-label": "الانتقال إلى الصفحة السابقة"
+    },
+    "table": {
+      "empty": "لا توجد إدخالات"
+    }
+  }
+}

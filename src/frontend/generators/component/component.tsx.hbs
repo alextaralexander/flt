@@ -1,11 +1,7 @@
-import * as React from "react"; 
+export type {{properCase name}}Props = {
+  className?: string;
+};
 
-export type {{properCase name}}Props = {};
-
-export const {{properCase name}} = (props: {{properCase name}}Props) => { 
-  return (
-    <div>
-      {{properCase name}}
-    </div>
-  ); 
+export const {{properCase name}} = ({ className }: {{properCase name}}Props) => {
+  return <div className={className} />;
 };

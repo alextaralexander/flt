@@ -1,9 +1,10 @@
-import * as React from 'react';
-import { UseFormRegisterReturn } from 'react-hook-form';
+import type * as React from 'react';
+import type { UseFormRegisterReturn } from 'react-hook-form';
 
 import { cn } from '@/utils/cn';
 
-import { FieldWrapper, FieldWrapperPassThroughProps } from './field-wrapper';
+import type { FieldWrapperPassThroughProps } from './field-wrapper';
+import { FieldWrapper } from './field-wrapper';
 
 type Option = {
   label: React.ReactNode;
@@ -24,7 +25,7 @@ export const Select = (props: SelectFieldProps) => {
     <FieldWrapper label={label} error={error}>
       <select
         className={cn(
-          'mt-1 block w-full rounded-md border-gray-600 py-2 pl-3 pr-10 text-base focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm',
+          'mt-1 block w-full rounded-md border-gray-600 py-2 ps-3 pe-10 text-base focus:border-blue-500 focus:ring-blue-500 focus:outline-hidden sm:text-sm',
           className,
         )}
         defaultValue={defaultValue}

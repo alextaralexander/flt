@@ -1,1 +1,11 @@
 *.hbs
+pnpm-lock.yaml
+dist
+coverage
+storybook-static
+playwright-report
+test-results
+public/mockServiceWorker.js
+**/generated/**
+docs
+LICENSE

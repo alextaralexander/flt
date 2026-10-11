@@ -1,10 +1,12 @@
-import { ArchiveX } from 'lucide-react';
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { BaseEntity } from '@/types/api';
+import { Icon } from '@/components/ui/icon';
+import type { BaseEntity } from '@/types/api';
 import { cn } from '@/utils/cn';
 
-import { TablePagination, TablePaginationProps } from './pagination';
+import type { TablePaginationProps } from './pagination';
+import { TablePagination } from './pagination';
 
 const TableElement = React.forwardRef<
   HTMLTableElement,
@@ -47,7 +49,7 @@ const TableFooter = React.forwardRef<
   <tfoot
     ref={ref}
     className={cn(
-      'border-t bg-muted/50 font-medium [&>tr]:last:border-b-0',
+      'border-t bg-muted/50 font-medium last:[&>tr]:border-b-0',
       className,
     )}
     {...props}
@@ -77,7 +79,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      'h-10 px-2 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]',
+      'h-10 px-2 text-start align-middle font-medium text-muted-foreground has-[[role=checkbox]]:pe-0 *:[[role=checkbox]]:translate-y-[2px]',
       className,
     )}
     {...props}
@@ -92,7 +94,7 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      'p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]',
+      'p-2 align-middle has-[[role=checkbox]]:pe-0 *:[[role=checkbox]]:translate-y-[2px]',
       className,
     )}
     {...props}
@@ -140,11 +142,12 @@ export const Table = <Entry extends BaseEntity>({
   columns,
   pagination,
 }: TableProps<Entry>) => {
+  const { t } = useTranslation();
   if (!data?.length) {
     return (
       <div className="flex h-80 flex-col items-center justify-center bg-white text-gray-500">
-        <ArchiveX className="size-16" />
-        <h4>No Entries Found</h4>
+        <Icon name="ArchiveX" className="size-16" />
+        <h4>{t('ui.table.empty')}</h4>
       </div>
     );
   }
