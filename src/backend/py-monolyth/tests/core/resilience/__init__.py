@@ -1,0 +1,1 @@
+"""Тесты resilience shared kernel."""

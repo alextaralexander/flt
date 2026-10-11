@@ -94,4 +94,4 @@ class TestCheckTokenFailClosed:
 
         # - Assert -
         assert response.status_code == 401
-        assert response.json()["messages"]["ERROR"][0]["message_mnemo_code"] == "INVALID_TOKEN"
+        assert response.json()["messages"]["ERROR"][0]["code"] == "core.unauthenticated"

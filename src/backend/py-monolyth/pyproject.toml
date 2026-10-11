@@ -57,6 +57,7 @@ dependencies = [
     "fastapi-cli>=0.0.7,<1",
     # Внутренняя библиотека: path-зависимость uv (ADR-001, OQ-69), её зависимости учитывает uv.lock.
     "py-main-lib",
+    "babel>=2.17,<3",
 ]
 
 [dependency-groups]
