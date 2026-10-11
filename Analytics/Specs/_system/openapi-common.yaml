@@ -1,0 +1,191 @@
+# Общие компоненты REST-контрактов FLT (SYS-03, этап 1 Г.3).
+# Контракты модулей подключают их ссылками вида
+#   $ref: "../../_system/openapi-common.yaml#/components/schemas/ErrorResponseV1"
+# Файл правится только через изменение SYS-03.
+openapi: 3.1.0
+info:
+  title: FLT common REST components
+  version: 1.0.0
+  description: Конверт ошибок, пагинация, фоновые задания и схемы безопасности (SYS-03-R7, R9, R12, R13, R18, R21, R27).
+servers:
+  - url: /
+paths: {}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access JWT EdDSA в заголовке Authorization (ADR-006, раздел 3.4; SYS-03-R21)
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: __Host-flt_access
+      description: Access JWT в httpOnly-cookie браузера; изменяющие методы требуют X-CSRF-Token (ADR-006)
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Ключ идемпотентности POST (SYS-03-R18)
+      schema: { type: string, format: uuid }
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: false
+      description: Обязателен для POST, PUT, PATCH, DELETE при аутентификации cookie (ADR-006, раздел 3.4)
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Непрозрачный курсор base64url (SYS-03-R12)
+      schema: { type: string }
+    Offset:
+      name: offset
+      in: query
+      required: false
+      description: Только для административных списков с x-flt-pagination offset (SYS-03-R13)
+      schema: { type: integer, minimum: 0, default: 0 }
+  headers:
+    XRequestId:
+      description: ID запроса от HAProxy (SYS-03-R20)
+      schema: { type: string }
+    RetryAfter:
+      description: Через сколько секунд повторить запрос (SYS-03-R18, R19)
+      schema: { type: integer, minimum: 1 }
+    ContentLanguage:
+      description: Локаль локализуемого содержимого ответа (SYS-03-R30)
+      schema: { type: string, enum: [ru, en, ar] }
+  responses:
+    Error:
+      description: Ошибка в конверте ErrorResponseV1 (SYS-03-R7)
+      headers:
+        X-Request-ID: { $ref: "#/components/headers/XRequestId" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponseV1" }
+    RateLimited:
+      description: Превышен лимит запросов (SYS-03-R19), код core.rate_limited
+      headers:
+        Retry-After: { $ref: "#/components/headers/RetryAfter" }
+        X-Request-ID: { $ref: "#/components/headers/XRequestId" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponseV1" }
+  schemas:
+    ErrorMessage:
+      type: object
+      additionalProperties: false
+      required: [code, message, details]
+      properties:
+        code:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+          description: Код ошибки <module>.<error_name> (SYS-03-R8)
+        message:
+          type: string
+          description: Текст для разработчика на английском; пользователю не показывается
+        details:
+          type: object
+          additionalProperties: true
+    ErrorResponseV1:
+      type: object
+      additionalProperties: false
+      required: [messages, payload, request_id]
+      properties:
+        messages:
+          type: object
+          additionalProperties: false
+          required: [INFO, WARNING, ERROR]
+          properties:
+            INFO:
+              type: array
+              maxItems: 0
+              items: { $ref: "#/components/schemas/ErrorMessage" }
+            WARNING:
+              type: array
+              maxItems: 0
+              items: { $ref: "#/components/schemas/ErrorMessage" }
+            ERROR:
+              type: array
+              minItems: 1
+              maxItems: 1
+              items: { $ref: "#/components/schemas/ErrorMessage" }
+        payload:
+          type: "null"
+        request_id:
+          type: string
+    ValidationErrorItem:
+      type: object
+      required: [loc, type, msg, ctx]
+      description: Элемент details.errors ошибки core.validation_failed (SYS-03-R9)
+      properties:
+        loc:
+          type: array
+          items:
+            oneOf:
+              - { type: string }
+              - { type: integer }
+        type: { type: string }
+        msg: { type: string }
+        ctx: { type: object, additionalProperties: true }
+    CoreCursorPageMeta:
+      type: object
+      required: [next_cursor]
+      description: Поле курсора страницы; модуль объявляет свою схему <Module><Resource>Page с items и next_cursor (SYS-03-R12)
+      properties:
+        next_cursor: { type: [string, "null"] }
+    CoreOffsetPage:
+      type: object
+      required: [items, total, offset, limit]
+      description: Страница по смещению для административных списков (SYS-03-R13); items уточняет модуль
+      properties:
+        items:
+          type: array
+          items: { type: object }
+        total: { type: integer, minimum: 0 }
+        offset: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+    CoreJobAcceptedResponse:
+      type: object
+      additionalProperties: false
+      required: [job_id, status]
+      properties:
+        job_id: { type: string, format: uuid }
+        status: { type: string, const: queued }
+    CoreJobStatus:
+      type: string
+      enum: [queued, running, succeeded, failed, cancelled]
+    CoreJobResponse:
+      type: object
+      required: [id, kind, status, progress, result_ref, error, created_at, updated_at, version]
+      description: Представление фонового задания GET /api/v1/<module>/jobs/{job_id} (SYS-03-R27)
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string }
+        status: { $ref: "#/components/schemas/CoreJobStatus" }
+        progress:
+          type: object
+          required: [percent, stage, message_key]
+          properties:
+            percent: { type: integer, minimum: 0, maximum: 100 }
+            stage: { type: string }
+            message_key: { type: string }
+        result_ref: { type: [string, "null"] }
+        error:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [code, details]
+              properties:
+                code: { type: string }
+                details: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
