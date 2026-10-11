@@ -9,7 +9,7 @@ from app.core.dao.caching import redis_conn
 from configs.redis_config import RedisMode, RedisSettings
 
 
-pytestmark = pytest.mark.no_db
+pytestmark = [pytest.mark.no_db, pytest.mark.req("SYS-05-R17")]
 
 
 class TestRedisClient:

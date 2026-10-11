@@ -6,7 +6,7 @@ from app.core.dao.db_helpers.db_connection import engine_options
 from configs.settings import AppRole
 
 
-pytestmark = pytest.mark.no_db
+pytestmark = [pytest.mark.no_db, pytest.mark.req("SYS-05-R40")]
 
 
 @pytest.mark.parametrize(

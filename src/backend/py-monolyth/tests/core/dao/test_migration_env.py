@@ -20,6 +20,8 @@ from app.core.modules import ModuleDefinition
 from configs.settings import settings
 
 
+pytestmark = [pytest.mark.req("SYS-05-R36"), pytest.mark.req("SYS-05-R38")]
+
 PROBE_MODULE = "probe_migrations"
 
 REVISION = '''"""probe revision."""

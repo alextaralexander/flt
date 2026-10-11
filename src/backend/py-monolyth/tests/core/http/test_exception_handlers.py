@@ -17,6 +17,9 @@ from configs.settings import settings
 from tests.conftest import mocked_function
 
 
+pytestmark = pytest.mark.req("SYS-03-R7")
+
+
 class SampleModel:
     """Класс-заглушка модели: обработчику 404 нужно только имя класса."""
 

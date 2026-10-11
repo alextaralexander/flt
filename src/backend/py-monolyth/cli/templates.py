@@ -596,11 +596,16 @@ class __PASCAL__Permissions:
 
 ENTITY_TEST = '''"""Тесты сервиса `__PASCAL__Service` модуля `__MODULE__`."""
 
+import pytest
 from py_main_lib.security.schemas import UserSecuritySchema
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.__MODULE__.schemas.__SNAKE___schema import Create__PASCAL__Schema
 from app.modules.__MODULE__.services.__SNAKE___service import __PASCAL__Service
+
+
+# Маркер трассировки обязателен (SYS-10-R12): тесты фичи помечаются ac("<ID ТЗ>-AC<N>") её критериев.
+pytestmark = pytest.mark.req("SYS-05-R7")
 
 
 class Test__PASCAL__Service:

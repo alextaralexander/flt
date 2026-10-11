@@ -75,6 +75,12 @@ dev = [
     "pytest-env>=1.1,<2",
     "pytest-mock>=3.14,<4",
     "coverage>=7.6,<8",
+    # Детерминизм (SYS-10-R37): запрет сети кроме loopback, случайный порядок с фиксированным seed
+    "pytest-socket>=0.7,<1",
+    "pytest-randomly>=3.16,<5",
+    # Фабрики тестовых объектов (SYS-10-R16) и заглушки HTTP внешних сервисов (SYS-10-R20)
+    "polyfactory>=2.18,<4",
+    "respx>=0.22,<1",
     # Безопасность (G6)
     "bandit>=1.8,<2",
     "detect-secrets>=1.5,<2",
@@ -183,7 +189,10 @@ testpaths = ["tests"]
 pythonpath = ["."]
 # Pytest-оверлей поверх стенда local; envs/test/ — деплой-стенд, к pytest отношения не имеет.
 env_files = ["envs/.test.env"]
-addopts = "-v"
+# SYS-10-R12, R37: неизвестный маркер — ошибка; сокеты только к loopback (pytest-socket);
+# случайный порядок с фиксированным seed (pytest-randomly; для поиска порядковых
+# зависимостей seed переопределяется: `-p randomly --randomly-seed=<n>`).
+addopts = "-v --strict-markers --durations=20 -p randomly --randomly-seed=20261010 --disable-socket --allow-hosts=127.0.0.1,::1,localhost"
 # Один event loop на всю сессию: engine/клиенты создаются на уровне модулей
 # и не переживают смену loop-а (раньше это делала кастомная фикстура event_loop).
 asyncio_default_fixture_loop_scope = "session"

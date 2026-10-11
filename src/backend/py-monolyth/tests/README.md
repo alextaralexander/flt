@@ -22,15 +22,36 @@ make test-cov      # с отчётом покрытия; порог — fail_und
 - **Миграции** — фикстура `db_migrate` накатывает модули реестра (`alembic -n <module>`) один раз на сессию.
 - `@pytest.mark.asyncio` не нужен: включён `asyncio_mode = "auto"`.
 
-## Окружение
+## Маркеры (SYS-10-R12, R29, R30; SYS-05-R45)
 
-- Тесты идут на стенде **local** с оверлеем `envs/.test.env` (его загружает pytest через
-  `env_files`): `TEST_MODE=true`, отдельная база `PG_DATABASE=flt_test` (роль `flt`) и база
-  Redis `REDIS_DB=15` того же экземпляра (SYS-10-R4, решение OQ-31) — запуск тестов не трогает
-  данные стенда local (база `flt`, Redis DB 0). Фикстуры `db_migrate` и очистки Redis отказываются
-  работать без `TEST_MODE`, на базе без суффикса `_test` и на базе Redis, отличной от 15.
-- Нужны PostgreSQL и Redis стенда local (адреса переопределяются `PG_PORT`, `REDIS_PORT` и т.п.).
-  Базу `flt_test` создаёт init-скрипт контейнера `deploy/docker-compose/postgres/init/01-create-test-db.sql`;
-  том, созданный до перехода с роли `ms_py_test` на `flt`, пересоздаётся (`docker compose down -v`).
-- Каталог `envs/test/` — конфигурация деплой-стенда test, к pytest отношения не имеет.
-- Тестовые значения в коде читаются из `tests/settings.py` (`test_settings`), а не из боевого `Settings`.
+Проверяются при сборе (`tests/support/markers.py`): нарушение — ошибка сбора, неизвестный маркер —
+ошибка (`--strict-markers`).
+
+| Маркер | Правило |
+| --- | --- |
+| `ac("STU-18-AC3")`, `req("SYS-05-R12")` | хотя бы один в `tests/core/`, `tests/modules/`, `tests/n_instances/`, `tests/architecture/` (там — обязательно `req`); можно на модуле: `pytestmark = pytest.mark.req(...)` |
+| `n_instances` | только в `tests/n_instances/` и у каждого теста там; без `--stand-url` тест пропускается |
+| `smoke` | смоук-набор «ходячего скелета» |
+| `slow("причина")` | тест длиннее 5 с, обоснование обязательно |
+| `quarantine(issue="#123", until="2026-10-24")` | не дольше 14 дней; до `until` падение не блокирует (`xfail`), после — блокирует |
+
+## Фикстуры (SYS-10-R4–R6, R17)
+
+- Тестам с хранилищами (без `no_db` и `n_instances`) хук сбора добавляет `overridden_get_session`,
+  `clean_tables` (TRUNCATE таблиц модулей после теста), `redis_clean` (FLUSHDB базы 15 перед тестом)
+  и `redis_no_persistent_keys` (после теста — падение на ключе без TTL, без префикса модуля или
+  `shared_kernel:`, с TTL сверх максимума категории SYS-05-R13).
+- `raw_test_redis` — сырой клиент базы 15 для проверок состояния; `redis_down` — Redis-клиент
+  процесса на закрытом порту (поведение без Redis).
+- `frozen_clock` — остановленный `Clock` (`set("2026-10-10T12:00:00Z")`, `advance(timedelta(...))`);
+  `freezegun` и `sleep` в тестах не используются.
+- `eventually` — `await eventually(probe, timeout=2.0)` вместо фиксированных пауз.
+- `jwt_signing_keys` — одноразовая Ed25519-пара тестовой сессии: корневой `conftest.py` генерирует
+  её до импорта приложения и выставляет `JWT_SIGNING_KEYS`, `JWT_ACTIVE_KID`, `JWT_PUBLIC_KEYS`.
+
+## Детерминизм (SYS-10-R37)
+
+`addopts` в `pyproject.toml`: pytest-socket (`--disable-socket --allow-hosts=127.0.0.1,::1,localhost`) —
+сеть только к loopback; pytest-randomly с фиксированным seed `20261010` (порядковые зависимости ищутся
+другим seed: `-p randomly --randomly-seed=<n>`); `TZ=UTC` в `envs/.test.env`. Фабрики — `polyfactory`,
+заглушки HTTP внешних сервисов — `respx`.
