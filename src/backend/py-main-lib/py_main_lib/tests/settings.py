@@ -1,5 +1,5 @@
 from pydantic import Field, computed_field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -54,8 +54,7 @@ class Settings(BaseSettings):
         description="ID пользователя для тестов.",
     )
 
-    class Config:
-        extra = "ignore"
+    model_config = SettingsConfigDict(extra="ignore")
 
 
 settings = Settings()

@@ -1,13 +1,11 @@
 """Главные fixture для тестов.
 
-Аутентификация:
-- HTTP-тесты переопределяют одну зависимость — `get_current_user` —
-  через `dependency_overrides` (fixture `overridden_app`);
-- брокерные no_db-тесты подменяют `check_token` (FastStream
-  резолвит зависимости своим механизмом, overrides FastAPI туда не достают).
+Аутентификация HTTP-тестов подменяется в одной точке — `get_current_user`
+через `dependency_overrides` (fixture `overridden_app`).
 
-БД: тесты интеграционные, ходят в Postgres тестового стенда;
-миграции накатываются один раз на сессию и откатываются в конце.
+БД: тесты интеграционные, ходят в PostgreSQL тестового стенда; миграции всех
+модулей реестра (`alembic -n <module> upgrade head`, ADR-002) накатываются один
+раз на сессию и откатываются в конце.
 """
 
 from collections.abc import AsyncGenerator, Iterator
@@ -19,17 +17,16 @@ from alembic import command
 from alembic.config import Config
 from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.dao.db_helpers.db_connection import get_session
-from app.core.security import security
-from app.core.security.permissions import MyEntityPermissions
 from app.core.security.schemas import UserSecuritySchema
 from app.core.security.security import get_current_user
 from app.core.telemetry import SERVICE_NAME, setup_telemetry
 from app.main import create_app
+from app.modules.registry import MODULES
 from configs.settings import settings
-from tests.fixtures.my_entity_fixture import created_my_entity  # noqa: F401
 from tests.settings import test_settings
 
 
@@ -56,25 +53,48 @@ async def mocked_endpoint(fn: Any = Depends(mocked_function)) -> None:
     await fn()
 
 
+@app.get("/mocked_endpoint/{item_id}")
+async def mocked_item_endpoint(item_id: str) -> dict[str, str]:
+    """Тестовый endpoint с параметром пути (шаблон маршрута для метрик)."""
+    return {"item_id": item_id}
+
+
+class MockedBody(BaseModel):
+    """Тело тестового запроса: обязательное поле для проверки ответа 422."""
+
+    name: str
+
+
+@app.post("/mocked_body")
+async def mocked_body_endpoint(body: MockedBody) -> None:
+    """Тестовый endpoint с телом запроса (валидация FastAPI)."""
+
+
+def alembic_config(module: str) -> Config:
+    """Конфигурация Alembic секции модуля из `alembic.ini` (аналог `alembic -n <module>`)."""
+    return Config("alembic.ini", ini_section=module)
+
+
 @pytest.fixture(scope="session")
 def db_migrate() -> Iterator[None]:
-    """Применение и откат миграций в тестовой базе данных.
+    """Применение и откат миграций всех модулей реестра в тестовой базе данных.
 
-    - Выполняет `alembic upgrade head`, чтобы применить все миграции перед тестами.
-    - После завершения тестов откатывает миграции с помощью `alembic downgrade base`.
+    - Выполняет `upgrade head` каждого модуля в порядке реестра перед тестами.
+    - После тестов откатывает модули в обратном порядке до `base`.
     - Используется на уровне сессии (`scope="session"`), чтобы миграции выполнялись один раз за тестовую сессию.
     """
-    # Защита от запуска на реальной БД: TEST_MODE задаёт только envs/test/test.env.
+    # Защита от запуска на реальной БД: TEST_MODE задаёт только оверлей envs/.test.env.
     assert test_settings.TEST_MODE, "TEST_MODE не установлен — тесты запущены не на тестовом стенде."
 
-    alembic_cfg = Config("alembic.ini")
-    command.upgrade(alembic_cfg, "head")
+    for module in MODULES:
+        command.upgrade(alembic_config(module), "head")
     yield
-    command.downgrade(alembic_cfg, "base")
+    for module in reversed(MODULES):
+        command.downgrade(alembic_config(module), "base")
 
 
 @pytest_asyncio.fixture
-async def overridden_get_session(db_migrate: None) -> AsyncGenerator[AsyncSession, None]:
+async def overridden_get_session(db_migrate: None) -> AsyncGenerator[AsyncSession]:
     """Сессия тестовой БД, которой подменяется штатная `get_session`."""
     async with async_session_maker() as session:
         yield session
@@ -82,7 +102,7 @@ async def overridden_get_session(db_migrate: None) -> AsyncGenerator[AsyncSessio
 
 @pytest_asyncio.fixture
 async def test_user() -> UserSecuritySchema:
-    """Аутентифицированный пользователь со всеми permissions примера."""
+    """Аутентифицированный пользователь со всеми правами модулей реестра."""
     return UserSecuritySchema(
         user_id=test_settings.TEST_USER_ID,
         permissions=_all_test_permissions(),
@@ -102,7 +122,7 @@ async def overridden_app(
       выполняется по-настоящему — RBAC-логика остаётся покрытой).
     """
 
-    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+    async def override_get_db() -> AsyncGenerator[AsyncSession]:
         try:
             yield overridden_get_session
         finally:
@@ -117,25 +137,8 @@ async def overridden_app(
     app.dependency_overrides.clear()
 
 
-@pytest.fixture(autouse=True)
-def override_auth_for_no_db_tests(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Подменяет broker-auth в тестах, которым не нужна БД."""
-    if not request.node.get_closest_marker("no_db"):
-        return
-
-    async def fake_check_token(token: str) -> UserSecuritySchema:
-        """Детерминированный авторизованный пользователь для no_db-тестов."""
-        return UserSecuritySchema(
-            user_id=test_settings.TEST_USER_ID,
-            permissions=_all_test_permissions(),
-            access_token=token,
-        )
-
-    monkeypatch.setattr(security, "check_token", fake_check_token)
-
-
 @pytest.fixture
-async def client(overridden_app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
+async def client(overridden_app: FastAPI) -> AsyncGenerator[AsyncClient]:
     """HTTP-клиент поверх ASGI-приложения (без реального сокета)."""
     async with AsyncClient(
         transport=ASGITransport(app=overridden_app),
@@ -160,5 +163,7 @@ def pytest_collection_modifyitems(items: list[pytest.Function]) -> None:
 
 
 def _all_test_permissions() -> set[str]:
-    """Все permissions, используемые тестами."""
-    return {value for name, value in vars(MyEntityPermissions).items() if name.isupper()}
+    """Все права модулей реестра (`ModuleDefinition.permissions`)."""
+    from app.core.modules import load_modules
+
+    return {code for module in load_modules(MODULES) for code in module.permissions}

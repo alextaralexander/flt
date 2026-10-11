@@ -5,6 +5,7 @@
 """
 
 import os
+import socket
 
 
 KNOWN_STANDS = ("local", "dev", "test", "prod")
@@ -28,3 +29,8 @@ def stand_env_file(prefix: str = "") -> str:
     stand = current_stand()
     file_name = f"{prefix}_{stand}.env" if prefix else f"{stand}.env"
     return f"envs/{stand}/{file_name}"
+
+
+def instance_id() -> str:
+    """Идентификатор инстанса: `HOSTNAME` контейнера или пода, иначе hostname машины (ADR-004, ADR-010)."""
+    return os.getenv("HOSTNAME") or socket.gethostname()

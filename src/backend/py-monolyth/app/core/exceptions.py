@@ -2,7 +2,6 @@
 
 from typing import Any
 
-from app.core.dao.models import SchemaBase
 from app.core.security.schemas import UserSecuritySchema
 
 
@@ -45,7 +44,7 @@ class ModelNotFoundInDatabaseError(BaseCustomException):
     def __init__(
         self,
         model_id: str,
-        model: type[SchemaBase],
+        model: type,
         is_deleted: bool = False,
     ) -> None:
         """Формирует 404-ошибку по модели и ID (is_deleted попадает в параметры)."""
