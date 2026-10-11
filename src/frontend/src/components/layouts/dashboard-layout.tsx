@@ -75,7 +75,7 @@ const Progress = () => {
 
   return (
     <div
-      className="fixed left-0 top-0 h-1 bg-blue-500 transition-all duration-200 ease-in-out"
+      className="fixed inset-s-0 top-0 h-1 bg-blue-500 transition-all duration-200 ease-in-out"
       style={{ width: `${progress}%` }}
     ></div>
   );
@@ -99,7 +99,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
-      <aside className="fixed inset-y-0 left-0 z-10 hidden w-60 flex-col border-r bg-black sm:flex">
+      <aside className="fixed inset-y-0 inset-s-0 z-10 hidden w-60 flex-col border-e bg-black sm:flex">
         <nav className="flex flex-col items-center gap-4 px-2 py-4">
           <div className="flex h-16 shrink-0 items-center px-4">
             <Logo />
@@ -112,7 +112,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               className={({ isActive }) =>
                 cn(
                   'text-gray-300 hover:bg-gray-700 hover:text-white',
-                  'group flex flex-1 w-full items-center rounded-md p-2 text-base font-medium',
+                  'group flex w-full flex-1 items-center rounded-md p-2 text-base font-medium',
                   isActive && 'bg-gray-900 text-white',
                 )
               }
@@ -120,7 +120,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <item.icon
                 className={cn(
                   'text-gray-400 group-hover:text-gray-300',
-                  'mr-4 size-6 shrink-0',
+                  'me-4 size-6 shrink-0',
                 )}
                 aria-hidden="true"
               />
@@ -129,7 +129,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
       </aside>
-      <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-60">
+      <div className="flex flex-col sm:gap-4 sm:py-4 sm:ps-60">
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:justify-end sm:border-0 sm:bg-transparent sm:px-6">
           <NavigationProgress />
           <Drawer>
@@ -140,7 +140,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </Button>
             </DrawerTrigger>
             <DrawerContent
-              side="left"
+              side="start"
               className="bg-black pt-10 text-white sm:max-w-60"
             >
               <nav className="grid gap-6 text-lg font-medium">
@@ -155,7 +155,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     className={({ isActive }) =>
                       cn(
                         'text-gray-300 hover:bg-gray-700 hover:text-white',
-                        'group flex flex-1 w-full items-center rounded-md p-2 text-base font-medium',
+                        'group flex w-full flex-1 items-center rounded-md p-2 text-base font-medium',
                         isActive && 'bg-gray-900 text-white',
                       )
                     }
@@ -163,7 +163,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     <item.icon
                       className={cn(
                         'text-gray-400 group-hover:text-gray-300',
-                        'mr-4 size-6 shrink-0',
+                        'me-4 size-6 shrink-0',
                       )}
                       aria-hidden="true"
                     />
@@ -193,7 +193,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                className={cn('block px-4 py-2 text-sm text-gray-700 w-full')}
+                className={cn('block w-full px-4 py-2 text-sm text-gray-700')}
                 onClick={() => logout.mutate({})}
               >
                 Sign Out

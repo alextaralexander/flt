@@ -1,13 +1,14 @@
 /// <reference types="vitest/config" />
 /// <reference types="vite/client" />
 
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
   // SPA с history-роутером: ассеты всегда от корня (ADR-005, 3.1)
   base: '/',
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: { tsconfigPaths: true },
   server: {
     port: 3000,

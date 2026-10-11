@@ -49,7 +49,7 @@ export const CommentsList = ({ discussionId }: CommentsListProps) => {
           <li
             aria-label={`comment-${comment.body}-${index}`}
             key={comment.id || index}
-            className="w-full bg-white p-4 shadow-sm"
+            className="w-full bg-white p-4 shadow-xs"
           >
             <Authorization
               policyCheck={POLICIES['comment:delete'](

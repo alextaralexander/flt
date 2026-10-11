@@ -6,6 +6,7 @@ import commentsConfigs from '@eslint-community/eslint-plugin-eslint-comments/con
 import js from '@eslint/js';
 import vitest from '@vitest/eslint-plugin';
 import prettierConfig from 'eslint-config-prettier';
+import betterTailwind from 'eslint-plugin-better-tailwindcss';
 import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
 import checkFile from 'eslint-plugin-check-file';
 import importX from 'eslint-plugin-import-x';
@@ -88,9 +89,16 @@ export default tseslint.config(
       jsxA11y.flatConfigs.recommended,
       commentsConfigs.recommended,
     ],
-    plugins: { 'check-file': checkFile, flt: fltPlugin },
+    plugins: {
+      'check-file': checkFile,
+      flt: fltPlugin,
+      'better-tailwindcss': betterTailwind,
+    },
     settings: {
       react: { version: 'detect' },
+      'better-tailwindcss': {
+        entryPoint: path.join(rootDir, 'src/index.css'),
+      },
       'import-x/resolver-next': [
         createTypeScriptImportResolver({
           project: path.join(rootDir, 'tsconfig.json'),
@@ -163,6 +171,15 @@ export default tseslint.config(
       '@eslint-community/eslint-comments/require-description': 'error',
       '@eslint-community/eslint-comments/no-unlimited-disable': 'error',
       'linebreak-style': ['error', 'unix'],
+      // SYS-07-R17: только логические классы направления
+      'flt/no-physical-direction-classes': 'error',
+      // Классы Tailwind 4: незарегистрированные, конфликтующие, устаревшие, порядок
+      ...betterTailwind.configs['correctness-error'].rules,
+      'better-tailwindcss/no-deprecated-classes': 'error',
+      'better-tailwindcss/no-duplicate-classes': 'error',
+      'better-tailwindcss/no-unnecessary-whitespace': 'error',
+      'better-tailwindcss/enforce-consistent-class-order': 'error',
+      'better-tailwindcss/enforce-canonical-classes': 'error',
     },
   },
   {
