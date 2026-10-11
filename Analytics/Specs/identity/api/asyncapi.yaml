@@ -1,0 +1,127 @@
+asyncapi: 3.0.0
+info:
+  title: FLT identity async API
+  version: 1.0.0
+  description: Объём этапа 1 (Г.5): события user_registered, user_suspended, session_revoked и сообщение WebSocket об отзыве сессии.
+servers:
+  ws:
+    $ref: "../../_system/asyncapi-common.yaml#/servers/ws"
+  kafka:
+    $ref: "../../_system/asyncapi-common.yaml#/servers/kafka"
+channels:
+  userRegistered:
+    address: flt.identity.user_registered.v1
+    x-flt-transport: kafka
+    x-flt-kind: event
+    x-flt-visibility: public
+    x-flt-partitions: 6
+    x-flt-retention-days: 7
+    messages:
+      userRegistered: { $ref: "#/components/messages/userRegistered" }
+  userSuspended:
+    address: flt.identity.user_suspended.v1
+    x-flt-transport: kafka
+    x-flt-kind: event
+    x-flt-visibility: public
+    x-flt-partitions: 6
+    x-flt-retention-days: 7
+    messages:
+      userSuspended: { $ref: "#/components/messages/userSuspended" }
+  sessionRevoked:
+    address: flt.identity.session_revoked.v1
+    x-flt-transport: kafka
+    x-flt-kind: event
+    x-flt-visibility: public
+    x-flt-partitions: 6
+    x-flt-retention-days: 7
+    messages:
+      sessionRevoked: { $ref: "#/components/messages/sessionRevoked" }
+  userSessionSocket:
+    address: "identity.session:{user_id}"
+    description: >-
+      Адресная доставка пользователю через ws:user:<user_id> (SYS-04-R13); отдельной подписки не требует.
+      После сообщения сервер закрывает соединение кодом 4401.
+    x-flt-transport: websocket
+    parameters:
+      user_id: { description: UUID пользователя }
+    messages:
+      sessionRevokedSocket: { $ref: "#/components/messages/sessionRevokedSocket" }
+operations:
+  publishUserRegistered:
+    action: send
+    channel: { $ref: "#/channels/userRegistered" }
+  publishUserSuspended:
+    action: send
+    channel: { $ref: "#/channels/userSuspended" }
+  publishSessionRevoked:
+    action: send
+    channel: { $ref: "#/channels/sessionRevoked" }
+  sendSessionRevokedSocket:
+    action: send
+    channel: { $ref: "#/channels/userSessionSocket" }
+    messages: [{ $ref: "#/channels/userSessionSocket/messages/sessionRevokedSocket" }]
+components:
+  messages:
+    userRegistered:
+      name: identity.user_registered
+      x-flt-model: app.modules.identity.public.events.UserRegistered
+      payload:
+        allOf:
+          - $ref: "../../_system/asyncapi-common.yaml#/components/schemas/EventEnvelope"
+          - type: object
+            properties:
+              event_type: { const: identity.user_registered }
+              event_version: { const: 1 }
+              payload:
+                type: object
+                required: [user_id, ui_language, roles]
+                properties:
+                  user_id: { type: string, format: uuid }
+                  ui_language: { type: string, enum: [ru, en, ar] }
+                  roles: { type: array, items: { type: string, enum: [learner, teacher, platform_admin] } }
+    userSuspended:
+      name: identity.user_suspended
+      x-flt-model: app.modules.identity.public.events.UserSuspended
+      payload:
+        allOf:
+          - $ref: "../../_system/asyncapi-common.yaml#/components/schemas/EventEnvelope"
+          - type: object
+            properties:
+              event_type: { const: identity.user_suspended }
+              event_version: { const: 1 }
+              payload:
+                type: object
+                required: [user_id, until]
+                properties:
+                  user_id: { type: string, format: uuid }
+                  until: { type: [string, "null"], format: date-time }
+    sessionRevoked:
+      name: identity.session_revoked
+      x-flt-model: app.modules.identity.public.events.SessionRevoked
+      payload:
+        allOf:
+          - $ref: "../../_system/asyncapi-common.yaml#/components/schemas/EventEnvelope"
+          - type: object
+            properties:
+              event_type: { const: identity.session_revoked }
+              event_version: { const: 1 }
+              payload:
+                type: object
+                required: [user_id, sid, reason]
+                properties:
+                  user_id: { type: string, format: uuid }
+                  sid: { type: [string, "null"], format: uuid, description: "null — отозваны все сессии пользователя" }
+                  reason: { type: string, enum: [logout, logout_all, reuse_detected, suspended] }
+    sessionRevokedSocket:
+      name: identity.session.revoked
+      payload:
+        allOf:
+          - $ref: "../../_system/asyncapi-common.yaml#/components/schemas/WsEnvelope"
+          - type: object
+            properties:
+              type: { const: identity.session.revoked }
+              payload:
+                type: object
+                required: [reason]
+                properties:
+                  reason: { type: string, enum: [logout, logout_all, reuse_detected, suspended] }
