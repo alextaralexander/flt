@@ -55,3 +55,37 @@ make test-cov      # с отчётом покрытия; порог — fail_und
 сеть только к loopback; pytest-randomly с фиксированным seed `20261010` (порядковые зависимости ищутся
 другим seed: `-p randomly --randomly-seed=<n>`); `TZ=UTC` в `envs/.test.env`. Фабрики — `polyfactory`,
 заглушки HTTP внешних сервисов — `respx`.
+
+## Стенд из N инстансов (SYS-05-R44–R54)
+
+Тесты `tests/n_instances/` идут через HAProxy стенда из 3 инстансов роли `api` (`--stand-url`):
+
+```shell
+make test-n3       # поднять стенд, pytest -m n_instances --stand-url http://127.0.0.1:8080, погасить стенд
+make stand-up      # только поднять стенд (docker compose -p flt … --profile ci up -d --wait --scale api=3)
+make stand-test    # тесты на поднятом стенде
+make stand-down    # погасить стенд
+```
+
+Проект compose — `flt` (контейнеры `flt-api-1…3`, `flt-worker-1…2`): стенд заменяет контейнеры
+`make compose-up` того же проекта, данные стенда local не трогает (PostgreSQL стенда — на tmpfs).
+Параллельно с локальной инфраструктурой — `make test-n3 STAND_PROJECT=flt-n3`. Если ghcr.io недоступен
+из сети сборки, образ сборочной стадии подменяется `FLT_UV_IMAGE=<образ с Python 3.14 и uv>`.
+
+Фикстуры (`tests/n_instances/conftest.py`, SYS-05-R46): `stand` (адрес HAProxy, проект compose,
+состояние серверов в `stats;csv`), `stand_client`, `instances` (`X-Instance-Id` и прямой адрес каждого
+инстанса), `on_instance(n)`, `stop_instance("flt-api-2")`, `pause_instance("flt-api-3")`; teardown
+возвращает контейнер и ждёт его состояния UP в HAProxy.
+
+## Окружение
+
+- Тесты идут на стенде **local** с оверлеем `envs/.test.env` (его загружает pytest через
+  `env_files`): `TEST_MODE=true`, отдельная база `PG_DATABASE=flt_test` (роль `flt`) и база
+  Redis `REDIS_DB=15` того же экземпляра (SYS-10-R4, решение OQ-31) — запуск тестов не трогает
+  данные стенда local (база `flt`, Redis DB 0). Фикстуры `db_migrate` и очистки Redis отказываются
+  работать без `TEST_MODE`, на базе без суффикса `_test` и на базе Redis, отличной от 15.
+- Нужны PostgreSQL и Redis стенда local (адреса переопределяются `PG_PORT`, `REDIS_PORT` и т.п.).
+  Базу `flt_test` создаёт init-скрипт контейнера `deploy/docker-compose/postgres/init/01-create-test-db.sql`;
+  том, созданный до перехода с роли `ms_py_test` на `flt`, пересоздаётся (`docker compose down -v`).
+- Каталог `envs/test/` — конфигурация деплой-стенда test, к pytest отношения не имеет.
+- Тестовые значения в коде читаются из `tests/settings.py` (`test_settings`), а не из боевого `Settings`.

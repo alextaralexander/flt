@@ -16,7 +16,8 @@ COMPOSE_INFRA ?= postgres redis kafka
 PY_MAIN_LIB ?= ../py-main-lib
 
 .DEFAULT_GOAL := help
-.PHONY: help install dev run run-worker test test-cov test-docker format format-check lint lint-fix typecheck arch \
+.PHONY: help install dev run run-worker test test-cov test-docker test-n3 stand-up stand-test stand-down stand-logs \
+        format format-check lint lint-fix typecheck arch \
         security secrets-scan check migrate makemigration migrate-downgrade asyncapi \
         scaffold-module scaffold-entity scaffold-subscriber list-modules lock pre-commit \
         compose-up compose-down docker-build clean
@@ -100,6 +101,36 @@ test-docker: ## Тесты в одноразовых PostgreSQL и Redis (docker
 	@PG_PORT=$(TEST_PG_PORT) REDIS_PORT=$(TEST_REDIS_PORT) $(RUN) pytest; STATUS=$$?; \
 		docker stop $(TEST_PG_CONTAINER) $(TEST_REDIS_CONTAINER) >/dev/null; \
 		exit $$STATUS
+
+# --- Стенд из N инстансов за HAProxy (SYS-05-R44–R54, ADR-011 job stand-n3) ---------------------
+# Проект compose — flt (SYS-11-R28): стенд заменяет контейнеры `make compose-up` того же проекта,
+# данные стенда local не трогает (у стенда PostgreSQL на tmpfs). Параллельно с локальной
+# инфраструктурой — другой проект: make test-n3 STAND_PROJECT=flt-n3.
+STAND_PROJECT ?= flt
+STAND_SCALE ?= 3
+STAND_URL ?= http://127.0.0.1:8080
+# --build собирает образ flt-backend; готовый образ: STAND_UP_FLAGS=--no-build FLT_BACKEND_IMAGE=<тег>.
+STAND_UP_FLAGS ?= --build
+STAND_COMPOSE = docker compose -p $(STAND_PROJECT) -f $(COMPOSE_FILE) -f $(COMPOSE_DIR)/docker-compose.ci.yml --profile ci
+
+stand-up: ## Поднять стенд N3: migrate, api × 3 за HAProxy (:8080), worker × 2, PostgreSQL, Redis, Kafka
+	$(STAND_COMPOSE) up -d --wait $(STAND_UP_FLAGS) --scale api=$(STAND_SCALE)
+
+stand-test: ## Тесты масштабируемости на поднятом стенде: pytest -m n_instances --stand-url $(STAND_URL)
+	$(RUN) pytest -m n_instances tests/n_instances --stand-url $(STAND_URL) --stand-project $(STAND_PROJECT)
+
+stand-logs: ## Логи контейнеров стенда N3
+	$(STAND_COMPOSE) logs --no-color --timestamps
+
+stand-down: ## Погасить стенд N3 (данные стенда — на tmpfs, тома local не удаляются)
+	$(STAND_COMPOSE) down --remove-orphans
+
+test-n3: ## Поднять стенд N3, прогнать тесты n_instances, погасить стенд (логи — при падении)
+	@$(MAKE) --no-print-directory stand-up || { $(MAKE) --no-print-directory stand-logs; \
+		$(MAKE) --no-print-directory stand-down; exit 1; }
+	@$(MAKE) --no-print-directory stand-test; STATUS=$$?; \
+		if [ $$STATUS -ne 0 ]; then $(MAKE) --no-print-directory stand-logs; fi; \
+		$(MAKE) --no-print-directory stand-down; exit $$STATUS
 
 # --- Полная проверка (Definition of Done) ----------------------------------
 

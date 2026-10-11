@@ -264,11 +264,16 @@ STORAGE_FIXTURES = ("overridden_get_session", "clean_tables", "redis_clean", "re
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
-    """Опция `--stand-url`: адрес HAProxy стенда N3 для тестов `n_instances` (SYS-05-R45, R46)."""
+    """Опции стенда N3 для тестов `n_instances` (SYS-05-R45, R46): адрес HAProxy и проект compose."""
     parser.addoption(
         "--stand-url",
         default=None,
         help="URL HAProxy стенда N3, например http://127.0.0.1:8080; без опции тесты n_instances пропускаются",
+    )
+    parser.addoption(
+        "--stand-project",
+        default=os.environ.get("FLT_STAND_PROJECT", "flt"),
+        help="Проект docker compose стенда N3 (контейнеры <project>-api-<n>); по умолчанию flt (SYS-11-R28)",
     )
 
 

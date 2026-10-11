@@ -145,6 +145,11 @@ services:
     command: ["postgres", "-c", "max_connections=200"]
     environment:
       POSTGRES_PASSWORD: ${PG_PASSWORD:-flt_ci} # pragma: allowlist secret
+    volumes:
+      # Данные стенда одноразовые: tmpfs вместо тома postgres-data стенда local (тот же проект flt),
+      # поэтому стенд не зависит от локальных данных и не портит их; `down` не требует `-v`.
+      - type: tmpfs
+        target: /var/lib/postgresql
 
   redis:
     # Пароль обязателен вне стенда local (ADR-013); база 0 — стенд, тестов pytest здесь нет.
