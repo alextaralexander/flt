@@ -31,6 +31,8 @@ dependencies = [
     "cryptography>=44",
     # HTTP client
     "httpx>=0.28,<1",
+    # SMTP-клиент shared kernel `MailClient` (OQ-11)
+    "aiosmtplib>=4,<6",
     # Metrics, tracing, monitoring
     "prometheus-client>=0.21,<1",
     # Клиент поиска shared kernel (ADR-014, этап 1 Г.4); логи в OpenSearch доставляет Fluent Bit (ADR-010).
@@ -170,6 +172,9 @@ extra_checks = true
 # Базовые классы (BaseService/BaseDAO/BaseEntityModel/ResponseV1) приходят из
 # py_main_lib без py.typed — наследование от них неизбежно наследует Any.
 disallow_subclassing_any = false
+# Контейнер зависимостей и точки расширения принимают `Protocol` как `type[T]`
+# (`provide(IdentityService)`, ADR-004 §2.6, SYS-09-R1); mypy считает такой аргумент ошибкой.
+disable_error_code = ["type-abstract"]
 
 [[tool.mypy.overrides]]
 # Внутренняя библиотека без py.typed-маркера — типы не раздаёт.
