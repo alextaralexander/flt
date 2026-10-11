@@ -1,0 +1,572 @@
+asyncapi: 3.0.0
+info:
+  title: FLT llm_gateway async API
+  version: 1.0.0
+  description: Канал стрима WebSocket (этап 1, Г.6) и топики модуля (SYS-08, спецификация модуля, раздел 6). x-flt-stage —
+    этап реализации.
+servers:
+  ws:
+    $ref: ../../_system/asyncapi-common.yaml#/servers/ws
+  kafka:
+    $ref: ../../_system/asyncapi-common.yaml#/servers/kafka
+channels:
+  stream:
+    address: llm_gateway.stream:{correlation_id}
+    x-flt-transport: websocket
+    x-flt-state-endpoint: null
+    x-flt-stage: 1
+    description: Канал стрима ответа модели; correlation_id генерирует клиент. Стрим исполняется на инстансе соединения и
+      не возобновляется после разрыва (ADR-009), поэтому REST-эндпоинта состояния нет — исключение из SYS-05-R25 по ADR-004.
+    parameters:
+      correlation_id:
+        description: UUID стрима
+    messages:
+      completionRequest:
+        $ref: '#/components/messages/completionRequest'
+      completionCancel:
+        $ref: '#/components/messages/completionCancel'
+      completionStart:
+        $ref: '#/components/messages/completionStart'
+      completionDelta:
+        $ref: '#/components/messages/completionDelta'
+      completionEnd:
+        $ref: '#/components/messages/completionEnd'
+      completionError:
+        $ref: '#/components/messages/completionError'
+  providerBindingCreated:
+    address: flt.llm_gateway.provider_binding_created.v1
+    x-flt-transport: kafka
+    x-flt-kind: event
+    x-flt-visibility: public
+    x-flt-partitions: 6
+    x-flt-retention-days: 7
+    x-flt-stage: 4
+    messages:
+      providerBindingCreated:
+        $ref: '#/components/messages/providerBindingCreated'
+  providerBindingInvalidated:
+    address: flt.llm_gateway.provider_binding_invalidated.v1
+    x-flt-transport: kafka
+    x-flt-kind: event
+    x-flt-visibility: public
+    x-flt-partitions: 6
+    x-flt-retention-days: 7
+    x-flt-stage: 1
+    messages:
+      providerBindingInvalidated:
+        $ref: '#/components/messages/providerBindingInvalidated'
+  providerBindingDeleted:
+    address: flt.llm_gateway.provider_binding_deleted.v1
+    x-flt-transport: kafka
+    x-flt-kind: event
+    x-flt-visibility: public
+    x-flt-partitions: 6
+    x-flt-retention-days: 7
+    x-flt-stage: 4
+    messages:
+      providerBindingDeleted:
+        $ref: '#/components/messages/providerBindingDeleted'
+  modelPreferenceChanged:
+    address: flt.llm_gateway.model_preference_changed.v1
+    x-flt-transport: kafka
+    x-flt-kind: event
+    x-flt-visibility: public
+    x-flt-partitions: 6
+    x-flt-retention-days: 7
+    x-flt-stage: 4
+    messages:
+      modelPreferenceChanged:
+        $ref: '#/components/messages/modelPreferenceChanged'
+  usageRecorded:
+    address: flt.llm_gateway.usage_recorded.v1
+    x-flt-transport: kafka
+    x-flt-kind: event
+    x-flt-visibility: public
+    x-flt-partitions: 6
+    x-flt-retention-days: 7
+    x-flt-stage: 1
+    messages:
+      usageRecorded:
+        $ref: '#/components/messages/usageRecorded'
+  platformModelLimitReached:
+    address: flt.llm_gateway.platform_model_limit_reached.v1
+    x-flt-transport: kafka
+    x-flt-kind: event
+    x-flt-visibility: public
+    x-flt-partitions: 6
+    x-flt-retention-days: 7
+    x-flt-stage: 2
+    messages:
+      platformModelLimitReached:
+        $ref: '#/components/messages/platformModelLimitReached'
+  reencryptKeysJob:
+    address: flt.llm_gateway.jobs.reencrypt_keys.v1
+    x-flt-transport: kafka
+    x-flt-kind: job
+    x-flt-visibility: internal
+    x-flt-partitions: 6
+    x-flt-retention-days: 7
+    x-flt-stage: 4
+    messages:
+      jobCommand:
+        $ref: ../../_system/asyncapi-common.yaml#/components/messages/jobCommand
+  prefillModelPreferencesJob:
+    address: flt.llm_gateway.jobs.prefill_model_preferences.v1
+    x-flt-transport: kafka
+    x-flt-kind: job
+    x-flt-visibility: internal
+    x-flt-partitions: 6
+    x-flt-retention-days: 7
+    x-flt-stage: 4
+    messages:
+      jobCommand:
+        $ref: ../../_system/asyncapi-common.yaml#/components/messages/jobCommand
+operations:
+  receiveCompletionRequest:
+    action: receive
+    channel:
+      $ref: '#/channels/stream'
+    messages:
+    - $ref: '#/channels/stream/messages/completionRequest'
+    - $ref: '#/channels/stream/messages/completionCancel'
+  sendCompletionStream:
+    action: send
+    channel:
+      $ref: '#/channels/stream'
+    messages:
+    - $ref: '#/channels/stream/messages/completionStart'
+    - $ref: '#/channels/stream/messages/completionDelta'
+    - $ref: '#/channels/stream/messages/completionEnd'
+    - $ref: '#/channels/stream/messages/completionError'
+  publishProviderBindingCreated:
+    action: send
+    channel:
+      $ref: '#/channels/providerBindingCreated'
+  publishProviderBindingInvalidated:
+    action: send
+    channel:
+      $ref: '#/channels/providerBindingInvalidated'
+  publishProviderBindingDeleted:
+    action: send
+    channel:
+      $ref: '#/channels/providerBindingDeleted'
+  publishModelPreferenceChanged:
+    action: send
+    channel:
+      $ref: '#/channels/modelPreferenceChanged'
+  publishUsageRecorded:
+    action: send
+    channel:
+      $ref: '#/channels/usageRecorded'
+  publishPlatformModelLimitReached:
+    action: send
+    channel:
+      $ref: '#/channels/platformModelLimitReached'
+  consumeReencryptKeys:
+    action: receive
+    channel:
+      $ref: '#/channels/reencryptKeysJob'
+    x-flt-consumer-group: flt.llm_gateway.reencrypt_keys
+  consumePrefillModelPreferences:
+    action: receive
+    channel:
+      $ref: '#/channels/prefillModelPreferencesJob'
+    x-flt-consumer-group: flt.llm_gateway.prefill_model_preferences
+components:
+  messages:
+    completionRequest:
+      name: llm_gateway.completion.request
+      payload:
+        allOf:
+        - $ref: ../../_system/asyncapi-common.yaml#/components/schemas/WsEnvelope
+        - type: object
+          properties:
+            type:
+              const: llm_gateway.completion.request
+            payload:
+              type: object
+              required:
+              - messages
+              - provider_binding_id
+              - llm_model
+              - params
+              - client_ts
+              properties:
+                messages:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required:
+                    - role
+                    - content
+                    properties:
+                      role:
+                        enum:
+                        - system
+                        - user
+                        - assistant
+                      content:
+                        type: string
+                provider_binding_id:
+                  type:
+                  - string
+                  - 'null'
+                  format: uuid
+                  description: null — модель платформы (только аноним быстрого теста, SYS-08-R8)
+                llm_model:
+                  type:
+                  - string
+                  - 'null'
+                params:
+                  type: object
+                  properties:
+                    temperature:
+                      type: number
+                      minimum: 0
+                      maximum: 1.5
+                    max_tokens:
+                      type: integer
+                      minimum: 1
+                client_ts:
+                  type: string
+                  format: date-time
+    completionCancel:
+      name: llm_gateway.completion.cancel
+      payload:
+        allOf:
+        - $ref: ../../_system/asyncapi-common.yaml#/components/schemas/WsEnvelope
+        - type: object
+          properties:
+            type:
+              const: llm_gateway.completion.cancel
+            payload:
+              type: object
+    completionStart:
+      name: llm_gateway.completion.start
+      payload:
+        allOf:
+        - $ref: ../../_system/asyncapi-common.yaml#/components/schemas/WsEnvelope
+        - type: object
+          properties:
+            type:
+              const: llm_gateway.completion.start
+            payload:
+              type: object
+              required:
+              - request_id
+              - provider
+              - llm_model
+              - started_at
+              properties:
+                request_id: &id001
+                  type: string
+                  format: uuid
+                provider:
+                  type: string
+                llm_model:
+                  type: string
+                started_at:
+                  type: string
+                  format: date-time
+    completionDelta:
+      name: llm_gateway.completion.delta
+      payload:
+        allOf:
+        - $ref: ../../_system/asyncapi-common.yaml#/components/schemas/WsEnvelope
+        - type: object
+          properties:
+            type:
+              const: llm_gateway.completion.delta
+            payload:
+              type: object
+              required:
+              - seq
+              - kind
+              properties:
+                seq:
+                  type: integer
+                  minimum: 0
+                kind:
+                  enum:
+                  - text
+                  - tool_call
+                  - reasoning
+                text:
+                  type: string
+                tool_call:
+                  type: object
+    completionEnd:
+      name: llm_gateway.completion.end
+      payload:
+        allOf:
+        - $ref: ../../_system/asyncapi-common.yaml#/components/schemas/WsEnvelope
+        - type: object
+          properties:
+            type:
+              const: llm_gateway.completion.end
+            payload:
+              type: object
+              required:
+              - finish_reason
+              - usage
+              - duration_ms
+              - ttft_ms
+              properties:
+                finish_reason:
+                  enum:
+                  - stop
+                  - length
+                  - tool_calls
+                  - cancelled
+                  - content_filter
+                usage:
+                  type: object
+                  required:
+                  - prompt_tokens
+                  - completion_tokens
+                  - total_tokens
+                  - estimated
+                  properties:
+                    prompt_tokens:
+                      type: integer
+                      minimum: 0
+                    completion_tokens:
+                      type: integer
+                      minimum: 0
+                    total_tokens:
+                      type: integer
+                      minimum: 0
+                    estimated:
+                      type: boolean
+                duration_ms:
+                  type: integer
+                  minimum: 0
+                ttft_ms:
+                  type:
+                  - integer
+                  - 'null'
+                  minimum: 0
+    completionError:
+      name: llm_gateway.completion.error
+      payload:
+        allOf:
+        - $ref: ../../_system/asyncapi-common.yaml#/components/schemas/WsEnvelope
+        - type: object
+          properties:
+            type:
+              const: llm_gateway.completion.error
+            payload:
+              type: object
+              required:
+              - code
+              - message
+              - retryable
+              - partial_seq
+              properties:
+                code:
+                  enum:
+                  - provider_unavailable
+                  - provider_auth
+                  - rate_limited
+                  - context_too_long
+                  - agent_offline
+                  - instance_shutdown
+                  - timeout
+                  - internal
+                  - consent_required
+                  - platform_model_forbidden
+                  - platform_budget_exhausted
+                  - no_model_configured
+                  - capability_unsupported
+                  - model_not_found
+                  - content_filtered
+                message:
+                  type: string
+                  description: ключ i18n errors.llm_gateway.<code>
+                retryable:
+                  type: boolean
+                retry_after_ms:
+                  type: integer
+                  minimum: 0
+                partial_seq:
+                  type:
+                  - integer
+                  - 'null'
+                  minimum: 0
+    providerBindingCreated:
+      name: llm_gateway.provider_binding_created
+      x-flt-model: app.modules.llm_gateway.public.events.ProviderBindingCreated
+      payload:
+        allOf:
+        - $ref: ../../_system/asyncapi-common.yaml#/components/schemas/EventEnvelope
+        - type: object
+          properties:
+            event_type:
+              const: llm_gateway.provider_binding_created
+            event_version:
+              const: 1
+            payload:
+              type: object
+              required:
+              - provider_binding_id
+              - user_id
+              - service
+              - kind
+              - jurisdiction
+              properties:
+                provider_binding_id: *id001
+                user_id: *id001
+                service:
+                  enum:
+                  - llm
+                  - speech
+                kind:
+                  type: string
+                jurisdiction:
+                  enum:
+                  - ru
+                  - foreign
+    providerBindingInvalidated:
+      name: llm_gateway.provider_binding_invalidated
+      x-flt-model: app.modules.llm_gateway.public.events.ProviderBindingInvalidated
+      payload:
+        allOf:
+        - $ref: ../../_system/asyncapi-common.yaml#/components/schemas/EventEnvelope
+        - type: object
+          properties:
+            event_type:
+              const: llm_gateway.provider_binding_invalidated
+            event_version:
+              const: 1
+            payload:
+              type: object
+              required:
+              - provider_binding_id
+              - user_id
+              - code
+              properties:
+                provider_binding_id: *id001
+                user_id: *id001
+                code:
+                  type: string
+    providerBindingDeleted:
+      name: llm_gateway.provider_binding_deleted
+      x-flt-model: app.modules.llm_gateway.public.events.ProviderBindingDeleted
+      payload:
+        allOf:
+        - $ref: ../../_system/asyncapi-common.yaml#/components/schemas/EventEnvelope
+        - type: object
+          properties:
+            event_type:
+              const: llm_gateway.provider_binding_deleted
+            event_version:
+              const: 1
+            payload:
+              type: object
+              required:
+              - provider_binding_id
+              - user_id
+              properties:
+                provider_binding_id: *id001
+                user_id: *id001
+    modelPreferenceChanged:
+      name: llm_gateway.model_preference_changed
+      x-flt-model: app.modules.llm_gateway.public.events.ModelPreferenceChanged
+      payload:
+        allOf:
+        - $ref: ../../_system/asyncapi-common.yaml#/components/schemas/EventEnvelope
+        - type: object
+          properties:
+            event_type:
+              const: llm_gateway.model_preference_changed
+            event_version:
+              const: 1
+            payload:
+              type: object
+              required:
+              - user_id
+              - scope_type
+              - scope_id
+              properties:
+                user_id: *id001
+                scope_type:
+                  enum:
+                  - default
+                  - course
+                scope_id:
+                  type:
+                  - string
+                  - 'null'
+                  format: uuid
+    usageRecorded:
+      name: llm_gateway.usage_recorded
+      x-flt-model: app.modules.llm_gateway.public.events.UsageRecorded
+      payload:
+        allOf:
+        - $ref: ../../_system/asyncapi-common.yaml#/components/schemas/EventEnvelope
+        - type: object
+          properties:
+            event_type:
+              const: llm_gateway.usage_recorded
+            event_version:
+              const: 1
+            payload:
+              type: object
+              required:
+              - usage_record_id
+              - user_id
+              - provider_kind
+              - llm_model
+              - purpose
+              - operation
+              - total_tokens
+              - estimated
+              properties:
+                usage_record_id: *id001
+                user_id:
+                  type:
+                  - string
+                  - 'null'
+                  format: uuid
+                provider_kind:
+                  type: string
+                llm_model:
+                  type: string
+                purpose:
+                  type: string
+                operation:
+                  enum:
+                  - completion
+                  - stream
+                  - embedding
+                  - connection_test
+                total_tokens:
+                  type: integer
+                  minimum: 0
+                estimated:
+                  type: boolean
+    platformModelLimitReached:
+      name: llm_gateway.platform_model_limit_reached
+      x-flt-model: app.modules.llm_gateway.public.events.PlatformModelLimitReached
+      payload:
+        allOf:
+        - $ref: ../../_system/asyncapi-common.yaml#/components/schemas/EventEnvelope
+        - type: object
+          properties:
+            event_type:
+              const: llm_gateway.platform_model_limit_reached
+            event_version:
+              const: 1
+            payload:
+              type: object
+              required:
+              - date
+              - budget_tokens
+              properties:
+                date:
+                  type: string
+                  format: date
+                budget_tokens:
+                  type: integer
+                  minimum: 0
