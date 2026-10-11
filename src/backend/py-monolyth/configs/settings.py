@@ -98,6 +98,10 @@ class Settings(BaseSettings):
         default="flt-api",
         description="Ожидаемое значение claim `aud`.",
     )
+    APP_PUBLIC_URL: str = Field(
+        default="http://flt.localhost",
+        description="Внешний адрес платформы; с ним сверяется Origin WebSocket cookie-клиентов (ADR-006, раздел 3.7).",
+    )
     AUTH_CSRF_SECRET: SecretStr = Field(
         description="Ключ HMAC signed double-submit CSRF-токена (секрет, ADR-006, ADR-013).",
     )

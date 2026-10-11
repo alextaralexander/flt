@@ -429,7 +429,7 @@ async def create_object(
     create_dto: Create__PASCAL__Schema,
     user: Annotated[
         UserSecuritySchema,
-        Security(auth_user(permissions_to_check=[__PASCAL__Permissions.CREATE_MODEL])),
+        Security(auth_user(__PASCAL__Permissions.CREATE_MODEL)),
     ],
     service: ServiceDep,
     session: SessionDep,
@@ -460,7 +460,7 @@ async def get_filtered_list(
     filter_dto: FilterSchema,
     user: Annotated[
         UserSecuritySchema,
-        Security(auth_user(permissions_to_check=[__PASCAL__Permissions.GET_LIST])),
+        Security(auth_user(__PASCAL__Permissions.GET_LIST)),
     ],
     service: ServiceDep,
     session: SessionDep,
@@ -491,7 +491,7 @@ async def get_object(
     obj_id: UUID,
     user: Annotated[
         UserSecuritySchema,
-        Security(auth_user(permissions_to_check=[__PASCAL__Permissions.GET_MODEL])),
+        Security(auth_user(__PASCAL__Permissions.GET_MODEL)),
     ],
     service: ServiceDep,
     session: SessionDep,
@@ -523,7 +523,7 @@ async def update_object(
     update_dto: Update__PASCAL__Schema,
     user: Annotated[
         UserSecuritySchema,
-        Security(auth_user(permissions_to_check=[__PASCAL__Permissions.UPDATE_MODEL])),
+        Security(auth_user(__PASCAL__Permissions.UPDATE_MODEL)),
     ],
     service: ServiceDep,
     session: SessionDep,
@@ -555,7 +555,7 @@ async def delete_object(
     obj_id: UUID,
     user: Annotated[
         UserSecuritySchema,
-        Security(auth_user(permissions_to_check=[__PASCAL__Permissions.DELETE_MODEL])),
+        Security(auth_user(__PASCAL__Permissions.DELETE_MODEL)),
     ],
     service: ServiceDep,
     session: SessionDep,

@@ -9,13 +9,13 @@ from pathlib import Path
 from typing import Annotated
 
 import pytest
-from fastapi import APIRouter, Security
+from fastapi import APIRouter, Depends, Security
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import MetaData
 
 from app.core.modules import ModuleDefinition
 from app.core.security.schemas import UserSecuritySchema
-from app.core.security.security import auth_user
+from app.core.security.security import auth_user, get_current_user, public
 from app.main import create_app
 from tests.architecture import checks
 from tests.architecture.conftest import ALLOWED_EXTRA_PREFIXES, IGNORED
@@ -42,7 +42,7 @@ def _router_with_routes() -> APIRouter:
 
     @router.get("/items")
     async def protected(
-        user: Annotated[UserSecuritySchema, Security(auth_user(permissions_to_check=["rogue_mod:items:read"]))],
+        user: Annotated[UserSecuritySchema, Security(auth_user("rogue_mod:items:read"))],
     ) -> None:
         """Роут с объявленным правом."""
 
@@ -50,15 +50,19 @@ def _router_with_routes() -> APIRouter:
     async def unprotected() -> None:
         """Роут без объявления доступа."""
 
+    @router.get("/public", dependencies=[public()])
+    async def public_page() -> None:
+        """Роут с маркером публичного доступа."""
+
     @router.get("/authenticated-only")
-    async def no_permission(user: Annotated[UserSecuritySchema, Security(auth_user())]) -> None:
+    async def no_permission(user: Annotated[UserSecuritySchema, Depends(get_current_user)]) -> None:
         """Роут с аутентификацией, но без права."""
 
     outside = APIRouter(prefix="/api/v1/other")
 
     @outside.get("/x")
     async def foreign(
-        user: Annotated[UserSecuritySchema, Security(auth_user(permissions_to_check=["rogue_mod:items:read"]))],
+        user: Annotated[UserSecuritySchema, Security(auth_user("rogue_mod:items:read"))],
     ) -> None:
         """Роут чужого префикса, подмешанный в роутер модуля."""
 
@@ -200,7 +204,7 @@ class TestRouterPrefixMatchesModule:
 
 @pytest.mark.req("SYS-06-R5")
 class TestEveryRouteDeclaresAccess:
-    """Каждый REST-роут модуля объявляет право через `auth_user(...)`; маркер `public=True` — Г.4."""
+    """Каждый REST-роут модуля объявляет право через `auth_user(...)`/`auth_user_optional(...)` или `public()`."""
 
     def test_registry_modules(self, registry_modules: list[ModuleDefinition]) -> None:
         """Модули реестра."""
@@ -211,7 +215,7 @@ class TestEveryRouteDeclaresAccess:
         assert sample_report["route_access"] == []
 
     def test_routes_without_permission_are_reported(self) -> None:
-        """Роут без зависимостей и роут с `auth_user()` без права обнаруживаются."""
+        """Роут без зависимостей и роут только с аутентификацией без права обнаруживаются; `public()` — нет."""
         module = _synthetic_module(router=_router_with_routes())
 
         assert checks.route_access_violations([module]) == [

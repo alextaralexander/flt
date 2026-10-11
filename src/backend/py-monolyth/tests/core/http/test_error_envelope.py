@@ -12,6 +12,7 @@ from app.core.dao.caching import RedisUnavailableError
 from app.core.exceptions import InsufficientPermissionsError, InvalidTokenError, ModelNotFoundInDatabaseError
 from app.core.http.errors import DomainError, ForbiddenError, RateLimitedError
 from app.core.http.schemas import ErrorResponseV1
+from app.core.ids import new_id
 from app.core.security.schemas import UserSecuritySchema
 from configs.settings import settings
 
@@ -72,7 +73,7 @@ def app_with_routes(http_app: FastAPI) -> FastAPI:
 
     @http_app.get("/api/v1/core-test/forbidden")
     async def forbidden() -> None:
-        user = UserSecuritySchema(user_id="u1", permissions=set(), access_token="t")
+        user = UserSecuritySchema(user_id=new_id(), sid=new_id())
         raise InsufficientPermissionsError(user, ["core_test:probe:read"])
 
     @http_app.get("/api/v1/core-test/forbidden-new")

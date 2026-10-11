@@ -20,6 +20,7 @@ import socket
 from collections.abc import AsyncGenerator, AsyncIterator, Iterator
 from datetime import date, datetime
 from typing import Any
+from uuid import UUID
 
 import pytest
 import pytest_asyncio
@@ -32,9 +33,12 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.container import container
 from app.core.dao.caching.redis_conn import close_redis_client, create_redis_client
 from app.core.dao.db_helpers.db_connection import get_session
+from app.core.mail import MailClient
 from app.core.modules import load_modules
+from app.core.security.permissions import Grant, Scope
 from app.core.security.schemas import UserSecuritySchema
 from app.core.security.security import get_current_user
 from app.core.telemetry import SERVICE_NAME, setup_telemetry
@@ -47,6 +51,7 @@ from tests.settings import test_settings
 from tests.support.clock import FrozenClock
 from tests.support.eventually import eventually as eventually_fn
 from tests.support.jwt_keys import SigningKeyPair
+from tests.support.mail import InMemoryMailClient
 from tests.support.markers import marker_errors, quarantine_xfail
 from tests.support.redis_keys import find_invalid_keys
 from tests.support.stand_guard import assert_test_database, assert_test_redis_db
@@ -181,6 +186,14 @@ def eventually() -> Any:
     return eventually_fn
 
 
+@pytest.fixture
+def mail_outbox() -> Iterator[InMemoryMailClient]:
+    """Письма теста вместо SMTP: подменяет `MailClient` в контейнере shared kernel (SYS-10-R21)."""
+    outbox = InMemoryMailClient()
+    with container.override(MailClient, outbox):
+        yield outbox
+
+
 @pytest.fixture(scope="session")
 def jwt_signing_keys() -> SigningKeyPair:
     """Одноразовая Ed25519-пара ключей подписи JWT тестовой сессии (ADR-006 §3.3; корневой conftest.py)."""
@@ -196,11 +209,15 @@ async def overridden_get_session(db_migrate: None) -> AsyncGenerator[AsyncSessio
 
 @pytest_asyncio.fixture
 async def test_user() -> UserSecuritySchema:
-    """Аутентифицированный пользователь со всеми правами модулей реестра."""
+    """Аутентифицированный пользователь со всеми правами модулей реестра (область `any`)."""
+    user_id = UUID(test_settings.TEST_USER_ID)
     return UserSecuritySchema(
-        user_id=test_settings.TEST_USER_ID,
-        permissions=_all_test_permissions(),
-        access_token=test_settings.TEST_AUTH_TOKEN,
+        user_id=user_id,
+        sid=UUID(int=1),
+        roles=("learner",),
+        permissions=frozenset(Grant(code=code, scope=Scope.ANY).bind(user_id) for code in _all_test_permissions()),
+        email_verified=True,
+        age_confirmed=True,
     )
 
 

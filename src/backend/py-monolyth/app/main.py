@@ -32,7 +32,7 @@ from app.core.kafka.broker import create_broker
 from app.core.logging import logger_settings
 from app.core.metrics.metrics_controller import router as service_router
 from app.core.metrics.metrics_middleware import PrometheusMiddleware
-from app.core.modules import ModuleDefinition, load_modules, module_routers
+from app.core.modules import ModuleDefinition, install_modules, load_modules, module_routers
 from app.core.telemetry import SERVICE_NAME, setup_telemetry, stop_telemetry
 from app.modules.registry import MODULES
 from configs.settings import AppRole, settings
@@ -72,8 +72,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 def _resolve_modules(modules: Sequence[ModuleDefinition] | None) -> Sequence[ModuleDefinition]:
-    """Модули для сборки: переданные явно (тесты) или загруженные из реестра."""
-    return load_modules(MODULES) if modules is None else modules
+    """Модули для сборки: переданные явно (тесты) или загруженные из реестра.
+
+    Модули реестра проверяются при старте и регистрируются в контейнере процесса (`install_modules`:
+    точки расширения, провайдер ролей, верификатор токенов); явно переданные модули тестов контейнер
+    процесса не трогают.
+    """
+    if modules is not None:
+        return modules
+    registry = load_modules(MODULES)
+    install_modules(registry)
+    return registry
 
 
 def create_app(modules: Sequence[ModuleDefinition] | None = None, role: AppRole | None = None) -> FastAPI:
