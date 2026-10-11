@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | draft |
-| Версия | 0.2 |
+| Статус | approved |
+| Версия | 1.0 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-11 (PR #3) |
 | Пункт(ы) BRD | все |
 | Модуль | все (backend, frontend, `src/tools`, deploy — в части стендов для тестов) |
 | Зависимости | ADR-002, ADR-003, ADR-004, ADR-005, ADR-006, ADR-009, ADR-010, ADR-011, ADR-013 (accepted); SYS-05 (методика тестов на N инстансах), SYS-03 и SYS-04 (контракты для контрактных тестов), SYS-06 (матрица прав для негативных тестов) |
@@ -673,3 +673,4 @@ test('[STU-19-AC4] recalculates progress', { annotation: { type: 'quarantine', d
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: профиль compose `test` → `ci` (профили `dev`, `ci`, `prod`, `recording` — SYS-11); кассеты — `tests/fixtures/llm_cassettes/<module>/`, `tests/fixtures/speech_cassettes/`, фикстуры заглушки — `tests/fixtures/llm_stub/`, тест секретов — `tests/fixtures/test_cassettes_have_no_secrets.py` (как в SYS-08-R25); R18 — режимы `scripted` (по умолчанию) и `replay` по фикстуре теста вместо «только replay», `CassetteMissingError`, ключ кассеты по SYS-08; пример теста прав — путь `learning-plan` и код права `learning_plan:plans:create` (SYS-06); раздел 4 — путь кассет | draft |
+| 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
