@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | draft |
-| Версия | 0.2 |
+| Статус | approved |
+| Версия | 1.0 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-11 (PR #3) |
 | Пункт(ы) BRD | все |
 | Модуль | все; код — `deploy/` (docker-compose, Helm, config, scripts), `src/tools` (`flt-tools deploy`), настройки стендов `src/backend/py-monolyth/envs/` |
 | Зависимости | ADR-001 (политика версий образов), ADR-003 (PostgreSQL, Redis, Sentinel), ADR-004 (роли `api`, `worker`, `migrate`, `media_agent`; порты 8000/8001), ADR-007 (MinIO standalone, `minio-init`, бэкап rclone), ADR-010 (наблюдаемость: экспортёры, Fluent Bit, пути `deploy/config/`), ADR-011 (CI, `docker-compose.ci.yml`, `values-ci.yaml`, `deploy-vps.yml`), ADR-012 (HAProxy, TLS, certbot, headless Service), ADR-013 (секреты: `.env`, Vault + ESO), ADR-014 (образ `flt-opensearch`, Qdrant, порог разделения кластеров), ADR-015 (LiveKit, порты, профиль `recording`) |
@@ -750,3 +750,4 @@ verify_through_haproxy        # /healthz 200, jwks 200, 3× be_api UP
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R4 — контейнер `blackbox-exporter` (профиль `prod`, внешняя доступность и срок TLS-сертификата), тег `minio/mc` закрепляется вместе с тегом сервера; R5 — `blackbox-exporter` в профиле `prod`; R6 — chart `prometheus-community` для `blackbox-exporter`; R13 — порт 9115 внутри сети, проверка снятия `X-Instance-Id` в HAProxy (SYS-05-R5); R18 — второе хранилище — OQ-79, RPO и RTO — по SYS-02; R23 п. 9 — шифрование диска — SYS-02-R61, OQ-80; раздел 9 — статус OQ-17, добавлены OQ-79, OQ-80; раздел 9 — OQ-63 resolved | draft |
+| 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
