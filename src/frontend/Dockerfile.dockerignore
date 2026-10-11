@@ -1,0 +1,16 @@
+# Контекст сборки — корень репозитория; в образ попадают только frontend,
+# контракты и конфигурация Nginx (BuildKit читает <Dockerfile>.dockerignore)
+*
+!src/frontend
+!Analytics/Specs
+!deploy/config/nginx
+src/frontend/node_modules
+src/frontend/dist
+src/frontend/coverage
+src/frontend/storybook-static
+src/frontend/playwright-report
+src/frontend/test-results
+src/frontend/e2e/.auth
+src/frontend/.env
+src/frontend/.env.*
+!src/frontend/.env.example

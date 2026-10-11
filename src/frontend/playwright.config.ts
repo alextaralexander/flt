@@ -1,56 +1,71 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 3000;
+const BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
 
 /**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
+ * Playwright (ADR-005, 3.7; SYS-10-R29, R31): проекты chromium-desktop,
+ * chromium-mobile (Pixel 7) и ar (RTL), без автоматических повторов.
+ * На mock-сервере приложение запускается dev-сервером с моками MSW в браузере;
+ * против стенда N3 — E2E_BASE_URL=http://127.0.0.1:8080 без webServer.
+ *
+ * Демо-сценарии bulletproof-react (e2e/tests) рассчитаны на десктопную
+ * навигацию и английский интерфейс: до их удаления в Г.7 они выполняются
+ * только в chromium-desktop; сценарии Г.11 (e2e/smoke) — во всех проектах.
  */
-// require('dotenv').config();
+const DEMO_TESTS = /e2e\/tests\//;
 
-/**
- * See https://playwright.dev/docs/test-configuration.
- */
 export default defineConfig({
   testDir: './e2e',
-  /* Run tests in files in parallel */
   fullyParallel: true,
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
+  retries: 0,
   workers: process.env.CI ? 1 : undefined,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+  reporter: [
+    ['html', { open: 'never' }],
+    ['json', { outputFile: 'playwright-report/results.json' }],
+  ],
   use: {
-    /* Base URL to use in actions like `await page.goto('/')`. */
-    // baseURL: 'http://127.0.0.1:3000',
-
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: 'on-first-retry',
+    baseURL: BASE_URL,
+    trace: 'retain-on-failure',
   },
-
-  /* Configure projects for major browsers */
+  expect: {
+    toHaveScreenshot: { maxDiffPixelRatio: 0.01 },
+  },
+  snapshotPathTemplate:
+    '{testDir}/__screenshots__/{projectName}/{testFilePath}/{arg}{ext}',
   projects: [
     { name: 'setup', testMatch: /.*\.setup\.ts/ },
     {
-      name: 'chromium',
+      name: 'chromium-desktop',
       testMatch: /.*\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
+        locale: 'en-US',
         storageState: 'e2e/.auth/user.json',
       },
       dependencies: ['setup'],
     },
+    {
+      name: 'chromium-mobile',
+      testMatch: /.*\.spec\.ts/,
+      testIgnore: DEMO_TESTS,
+      use: { ...devices['Pixel 7'] },
+    },
+    {
+      name: 'ar',
+      testMatch: /.*\.spec\.ts/,
+      testIgnore: DEMO_TESTS,
+      use: { ...devices['Desktop Chrome'], locale: 'ar' },
+    },
   ],
-
-  /* Run your local dev server before starting the tests */
-  webServer: {
-    command: `pnpm dev --port ${PORT}`,
-    timeout: 10 * 1000,
-    port: PORT,
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: process.env.E2E_BASE_URL
+    ? undefined
+    : {
+        command: `pnpm dev --port ${PORT}`,
+        env: { VITE_APP_ENABLE_API_MOCKING: 'true' },
+        timeout: 60 * 1000,
+        port: PORT,
+        reuseExistingServer: !process.env.CI,
+      },
 });

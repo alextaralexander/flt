@@ -3,7 +3,17 @@
 
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
+
+// Адреса для dev-прокси (не попадают в сборку): /api и /ws — монолит,
+// /flt-* — хранилище; пути не переписываются, как в HAProxy (ADR-005, 3.5;
+// ADR-007; ADR-012). При VITE_APP_ENABLE_API_MOCKING=true запросы
+// перехватывает MSW в браузере.
+const devEnv = loadEnv(process.env.NODE_ENV ?? 'development', process.cwd(), [
+  'VITE_DEV_',
+]);
+const backendUrl = devEnv.VITE_DEV_BACKEND_URL ?? 'http://localhost:8000';
+const storageUrl = devEnv.VITE_DEV_STORAGE_URL ?? 'http://localhost:9000';
 
 export default defineConfig({
   // SPA с history-роутером: ассеты всегда от корня (ADR-005, 3.1)
@@ -12,6 +22,15 @@ export default defineConfig({
   resolve: { tsconfigPaths: true },
   server: {
     port: 3000,
+    proxy: {
+      '/api': { target: backendUrl, changeOrigin: false },
+      '/ws': {
+        target: backendUrl.replace(/^http/, 'ws'),
+        ws: true,
+        changeOrigin: false,
+      },
+      '^/flt-': { target: storageUrl, changeOrigin: false },
+    },
   },
   preview: {
     port: 3000,
