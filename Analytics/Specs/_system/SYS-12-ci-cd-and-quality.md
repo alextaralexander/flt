@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | draft |
-| Версия | 0.2 |
+| Статус | approved |
+| Версия | 1.0 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-11 (PR #3) |
 | Пункт(ы) BRD | все |
 | Модуль | все (backend, frontend, `src/tools`, deploy, Analytics) |
 | Зависимости | ADR-011 (accepted); ADR-001, ADR-002, ADR-005, ADR-013 (accepted); SYS-10 (тесты и теги), SYS-05 (стенд N3), SYS-11 (compose CI, Helm `values-ci.yaml`, чек-лист VPS) |
@@ -754,3 +754,4 @@ echo "SMOKE OK"
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R5 — перевод PR в ready на шаге 9 (ADR-011 v1.1, CLAUDE.md), а не на шаге 11, чек-боксы шаблона PR и раздела 4; R2, R4 и пример `ci-ok` — job `dependency-audit` в быстрой ступени и в обязательных проверках; новые R35 (`dependency-audit`: pip-audit, pnpm audit, лицензии), R36 (Trivy в `images` и `release.yml`), R37 (axe WCAG 2.2 AA и Lighthouse CI в `e2e`), R38 (`flt-tools permissions check`, `modules check`, `deploy parity`), R39 (oasdiff в `contracts`); R23 — пути кассет по SYS-10; раздел 9 — OQ-70 resolved | draft |
+| 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
