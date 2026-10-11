@@ -120,5 +120,5 @@ def test_boundary_violation_breaks_build(
     # - Assert -
     assert result.returncode == 1, result.stdout + result.stderr
     assert "BROKEN" in result.stdout
-    broken_lines = [line for line in result.stdout.splitlines() if line.endswith("BROKEN")]
+    broken_lines = [line for line in result.stdout.splitlines() if " BROKEN" in line]
     assert any(line.startswith(contract_name) for line in broken_lines), result.stdout

@@ -79,6 +79,7 @@ class TestScaffoldedModule:
             "permissions.py",
             "api/router.py",
             "api/order_item_controller.py",
+            "public/topics.py",
             "brokers/router.py",
             "brokers/subscribers.py",
             "migrations/versions/.gitkeep",
@@ -102,6 +103,8 @@ class TestScaffoldedModule:
             scaffolded_tree / "app" / "modules" / MODULE / "module.py",
             scaffolded_tree / "app" / "modules" / MODULE / "api" / "router.py",
             scaffolded_tree / "app" / "modules" / MODULE / "brokers" / "subscribers.py",
+            scaffolded_tree / "app" / "modules" / MODULE / "public" / "topics.py",
+            scaffolded_tree / "app" / "modules" / MODULE / "models" / "__init__.py",
         ]
         before = [path.read_text(encoding="utf-8") for path in watched]
 
@@ -141,6 +144,42 @@ class TestScaffoldedModule:
             "sample_mod:order_items:read,sample_mod:order_items:update",
             "SAMPLE_MOD_",
         ]
+
+
+@pytest.mark.req("SYS-04-R21")
+class TestScaffoldedDelivery:
+    """Модуль получает таблицы доставки и заданий, декларации топиков и идемпотентного подписчика."""
+
+    def test_delivery_tables_topics_and_outbox_are_wired(self, scaffolded_tree: Path) -> None:
+        """В `ModuleDefinition` — outbox и топики; в метаданных — outbox, inbox, jobs, scheduled_runs."""
+        # - Act -
+        script = (
+            "from app.core.modules import load_modules\n"
+            "from app.modules.registry import MODULES\n"
+            "[m] = load_modules(MODULES)\n"
+            "print('@@', m.outbox.fullname)\n"
+            "print('@@', ','.join(sorted(t.name for t in m.metadata.tables.values())))\n"
+            "print('@@', ','.join(f'{t.name}:{t.kind}:{t.visibility}' for t in m.topics))\n"
+        )
+        stdout = _run(scaffolded_tree, "-c", script).stdout
+        output = [line.removeprefix("@@ ") for line in stdout.splitlines() if line.startswith("@@ ")]
+
+        # - Assert -
+        assert output == [
+            f"{MODULE}.outbox",
+            "jobs,order_item,outbox,processed_events,scheduled_runs",
+            f"{TOPIC}:event:internal",
+        ]
+
+    @pytest.mark.req("SYS-04-R26")
+    def test_subscriber_is_idempotent_and_uses_declaration(self, scaffolded_tree: Path) -> None:
+        """Подписчик обёрнут `@idempotent_consumer` и подписан на имя из декларации топика."""
+        subscribers = (scaffolded_tree / "app" / "modules" / MODULE / "brokers" / "subscribers.py").read_text(
+            encoding="utf-8"
+        )
+        assert '@idempotent_consumer("sample_mod.order_placed", processed_events)' in subscribers
+        assert "ORDER_PLACED.name" in subscribers
+        assert not (scaffolded_tree / "app" / "modules" / MODULE / "brokers" / "topics.py").exists()
 
 
 class TestScaffoldedCodeQuality:
