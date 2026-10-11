@@ -3,7 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Статус | approved |
-| Версия | 1.0 |
+| Версия | 1.1 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-11 (PR #3) |
@@ -111,7 +111,7 @@
 | 500 | `core.internal` | необработанное исключение; `details` пуст вне `DEBUG_MODE` |
 | 503 | `core.service_unavailable` | зависимость недоступна там, где политика fail-closed (ADR-003: лимиты модели платформы без Redis); заголовок `Retry-After` |
 
-- **Обоснование**: ADR-006 перечисляет коды `invalid_credentials`, `refresh_reused`, `csrf_invalid`, `user_blocked`, `account_exists_use_password`, `external_account_taken` и просит оформить их в SYS-03 — здесь они получают префикс модуля (`identity.invalid_credentials`); ADR-009 — коды стрима (`provider_unavailable` и остальные) в REST появляются как `llm_gateway.provider_unavailable` (SYS-08). Префикс модуля исключает коллизии между модулями и совпадает с форматом `event_type` (SYS-04) и типов WebSocket, что даёт один словарь идентификаторов для i18n (`errors.<code>` — SYS-07) и логов.
+- **Обоснование**: ADR-006 перечисляет коды `invalid_credentials`, `refresh_reused`, `csrf_invalid`, `user_suspended` (в ADR-006 — `user_blocked`, термин заменён по OQ-83), `account_exists_use_password`, `external_account_taken` и просит оформить их в SYS-03 — здесь они получают префикс модуля (`identity.invalid_credentials`); ADR-009 — коды стрима (`provider_unavailable` и остальные) в REST появляются как `llm_gateway.provider_unavailable` (SYS-08). Префикс модуля исключает коллизии между модулями и совпадает с форматом `event_type` (SYS-04) и типов WebSocket, что даёт один словарь идентификаторов для i18n (`errors.<code>` — SYS-07) и логов.
 - **Проверка**: правило Spectral `flt-error-code-pattern` (все значения `enum` у свойства `code` в примерах и схемах ошибок соответствуют `^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`); архитектурный тест `test_error_codes_prefixed_by_module` (обход подклассов `DomainError` во всех модулях реестра: `code` начинается с `<module>.` своего пакета или `core.` для `app/core`; коды уникальны); unit-тест таблицы `tests/core/http/test_core_error_codes.py` на соответствие HTTP-кодов.
 - **Применимость**: backend, tests, CI.
 
@@ -284,7 +284,7 @@
 |---|---|
 | все | Роутер `APIRouter(prefix="/api/v1/<module-kebab>", tags=["<module>"])`; `operationId` по SYS-03-R24; схемы с префиксом модуля (SYS-03-R11); ошибки — подклассы `DomainError` с `code` `<module>.<name>` в `public/errors.py`; списки — `paginate_keyset()` shared kernel; `version` в `PUT`/`PATCH`; `Idempotency-Key` у создающих `POST`; контракт `Analytics/Specs/<module>/api/openapi.yaml` и тест `tests/contracts/test_openapi_<module>.py`; модули с заданиями — ресурс `/jobs/{job_id}` |
 | shared kernel (`app/core/http`) | `schemas.py` (`ErrorResponseV1`, `ErrorMessage`, `CorePage`, `CoreOffsetPage`, `CoreJobAcceptedResponse`), `errors.py` (`DomainError`, коды `core.*`), `exception_handlers.py` (перенос из `app/api`, `error_envelope`), middleware `request_id`, `body_limit`, `locale`, `deprecation`; зависимости `Idempotent()`, `paginate_keyset()`, `paginate_offset()`, `parse_sort()`; хелпер фильтрации по диапазонам |
-| identity | Дополнительный префикс `/api/v1/auth` (раздел 6); коды `identity.invalid_credentials`, `identity.refresh_reused`, `identity.csrf_invalid`, `identity.user_blocked`, `identity.account_exists_use_password`, `identity.external_account_taken`, `identity.login_rate_limited` (ADR-006); операции OAuth с редиректом (раздел 6); `GET /api/v1/auth/.well-known/jwks.json` (раздел 6) |
+| identity | Дополнительный префикс `/api/v1/auth` (раздел 6); коды `identity.invalid_credentials`, `identity.refresh_reused`, `identity.csrf_invalid`, `identity.user_suspended`, `identity.account_exists_use_password`, `identity.external_account_taken`, `identity.login_rate_limited` (ADR-006); операции OAuth с редиректом (раздел 6); `GET /api/v1/auth/.well-known/jwks.json` (раздел 6) |
 | llm_gateway | `POST /api/v1/llm-gateway/provider-bindings/{provider_binding_id}/test` — единственный синхронный внешний вызов по REST (раздел 6; SYS-08) |
 | local_runtime | `POST /api/v1/local-runtime/pairings` и `…/pairings/{pairing_id}/token` — анонимные операции с лимитом (ADR-008); прочее по общим правилам |
 | frontend (app_shell, shared) | orval генерирует клиент из контрактов; интерсептор axios: `X-CSRF-Token`, повтор после `401` через `refresh`, обработка не-JSON `429`/`413`/`503`, предупреждение по `Deprecation`; zod-схемы ответов терпимы к новым полям и значениям перечислений (SYS-03-R29) |
@@ -605,3 +605,4 @@ class InvalidCredentialsError(DomainError):
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R1 обоснование — пример ADR-004 исправлен в 1.1; R7 обоснование — OQ-69 resolved; R18 субъект анонима — cookie `flt_anon_session` (OQ-77); R13 проверка — права администратора в формате SYS-06; R19 путь теста N3 `tests/n_instances/core/`; R30 порядок локали: профиль → cookie `flt_ui_language` → `Accept-Language` → `ru`; раздел 9 — статусы OQ-25, OQ-69, OQ-70, добавлен OQ-77; `provider-connections` → `provider-bindings` в таблице исключений (термин SYS-08, ADR-009); пути тестов N3 R17, R18 — `tests/n_instances/core/` | draft |
 | 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
+| 1.1 | 2026-10-11 | пользователь | Термин отключения аккаунта: код `identity.user_suspended` вместо `identity.user_blocked` в обосновании R8 и разделе 4 (OQ-83, PR #4); требования не менялись | approved |

@@ -3,7 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Статус | approved |
-| Версия | 1.0 |
+| Версия | 2.0 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-11 (PR #3) |
@@ -140,7 +140,7 @@
 
 ### SYS-01-R10 Состав shared kernel ограничен allowlist-ом
 
-- **Формулировка**: Пакет `app/core` должен содержать только подпакеты из перечня: `modules`, `http`, `schemas`, `exceptions`, `ids`, `time`, `dao` (`db_helpers`, `caching`), `kafka`, `ws`, `container`, `security`, `storage`, `search`, `mail`, `captcha`, `crypto`, `logging`, `metrics`, `telemetry`, `health`, `settings`; новый подпакет добавляется только `changed`-версией этой спецификации.
+- **Формулировка**: Пакет `app/core` должен содержать только подпакеты из перечня: `modules`, `http`, `schemas`, `exceptions`, `ids`, `time`, `dao` (`db_helpers`, `caching`), `kafka`, `ws`, `container`, `security`, `storage`, `search`, `mail`, `captcha`, `crypto`, `i18n`, `resilience`, `extensions`, `logging`, `metrics`, `telemetry`, `health`, `settings`; новый подпакет добавляется только `changed`-версией этой спецификации.
 - **Обоснование**: CLAUDE.md «Модульный монолит»: общий код минимален, не превращать в свалку; ADR-002, раздел 3.8; названия подпакетов фиксируют содержимое, допустимое по таблице недоменных частей.
 - **Проверка**: архитектурный тест `tests/architecture/test_core_allowlist.py::test_core_packages_in_allowlist` (`<будет создан>`): каталоги первого уровня `app/core/*` ⊆ перечню; контракт `core-does-not-import-modules` (ADR-002); ревью `Analytics/Specs/shared_kernel/_module.md`.
 - **Применимость**: backend, tests.
@@ -453,3 +453,4 @@ TOPICS: tuple[TopicDeclaration, ...] = (MATERIAL_UPLOADED_V1, JOB_EXTRACT_TEXT_V
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: таблица 3.1 — `model_preferences` и `harness_settings` у `llm_gateway`, выбор модели убран из `learner_profile`, `course_default_model` у `courses` отделён от `platform_model`; таблица 3.2 — событие `model_preference_changed.v1` и команда `prefill_model_preferences` у `llm_gateway` вместо `learner_profile.model_selected`; R7 проверка и пример 4 — `public/topics.py`, `TopicDeclaration` с `visibility` (SYS-04-R21); раздел 9 — OQ-81 | draft |
 | 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
+| 2.0 | 2026-10-11 | пользователь | R10: в перечень подпакетов `app/core` добавлены `i18n` (SYS-07), `resilience` (SYS-08), `extensions` (SYS-09) — OQ-84, PR #4 | approved |

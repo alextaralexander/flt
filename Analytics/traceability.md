@@ -2,7 +2,7 @@
 
 > Связь BRD ↔ ТЗ ↔ тесты ↔ статус для каждого пункта бизнес-требований.
 > Основа: [FLT_BRD.md](BRD/FLT_BRD.md) и [SDD_plan.md](BRD/SDD_plan.md) (Приложение А, разделы этапов). Правила процесса: [CLAUDE.md](../CLAUDE.md).
-> Версия 0.6 от 2026-10-11, статус: **draft**.
+> Версия 0.8 от 2026-10-11, статус: **draft**.
 
 ## 1. Назначение
 
@@ -178,6 +178,10 @@
 | SYS-11 | Развёртывание | 1 | `Analytics/Specs/_system/SYS-11-deployment-and-environments.md` | approved |
 | SYS-12 | CI/CD и качество | 1 | `Analytics/Specs/_system/SYS-12-ci-cd-and-quality.md` | approved |
 | SYS-13 | Архитектура плагинов | 7 | `Analytics/Specs/_system/SYS-13-plugin-architecture.md` | — |
+| `shared_kernel` | Спецификация модуля: shared kernel | 1 | `Analytics/Specs/shared_kernel/_module.md` | approved |
+| `identity` | Спецификация модуля: identity (базовая часть) | 1 | `Analytics/Specs/identity/_module.md` | approved |
+| `llm_gateway` | Спецификация модуля: llm_gateway (базовая часть) | 1 | `Analytics/Specs/llm_gateway/_module.md` | approved |
+| `app_shell` | Спецификация модуля: frontend app-shell | 1 | `Analytics/Specs/app_shell/_module.md` | approved |
 | ADR-001 | Стек и политика версий (Python и FastAPI, React и TypeScript, переход на Python 3.14) | 1 | `Analytics/ADR/ADR-001-tech-stack.md` | accepted |
 | ADR-002 | Раскладка доменных модулей в boilerplate, скаффолдер, контроль границ модулей | 1 | `Analytics/ADR/ADR-002-module-layout.md` | accepted |
 | ADR-003 | Хранение состояния (PostgreSQL, Redis, крупные файлы) | 1 | `Analytics/ADR/ADR-003-state-storage.md` | accepted |

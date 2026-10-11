@@ -3,8 +3,8 @@
 | Поле | Значение |
 |---|---|
 | Статус | accepted |
-| Версия | 1.0 |
-| Дата | 2026-10-10 |
+| Версия | 1.1 |
+| Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-10 (PR #2) |
 | Пункт(ы) BRD | VIS-04 (регистрация), VIS-05 (вход), ADM-01 (блокировка), TCH-01; косвенно — все (каждый запрос аутентифицируется) |
@@ -295,3 +295,4 @@ CSRF-токен: `random` — 16 байт base64url, `hmac` = HMAC-SHA256(`AUTH_
 | 0.1 | 2026-10-10 | Claude | Черновик | proposed |
 | 0.2 | 2026-10-10 | Claude | Решения пользователя 2026-10-10: fail-open проверки отзыва без Redis, refresh через PostgreSQL, автопривязка OAuth по подтверждённому email (Google, Яндекс ID), для VK ID — явная привязка. Согласование с ADR-008 (токен агента `flta_…` вместо пары access/refresh клиента `agent`, `POST /api/v1/auth/agent/pair` удалён), ADR-010 (имя метрики `flt_auth_revocation_check_skipped_total`), ADR-002 (`app/modules/identity`), ADR-004 (канал `ws:user:*`) | proposed |
 | 1.0 | 2026-10-10 | пользователь | Принят без изменений (PR #2, слияние в main) | accepted |
+| 1.1 | 2026-10-11 | пользователь | Без изменения решений: термин отключения аккаунта в реализации — `suspended` (`users.status = suspended`, событие `flt.identity.user_suspended.v1`, код `identity.user_suspended`) вместо `blocked` по глоссарию и SYS-06 (OQ-83, PR #4) | accepted |

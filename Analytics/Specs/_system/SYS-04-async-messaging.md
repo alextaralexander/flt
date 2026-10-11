@@ -3,7 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Статус | approved |
-| Версия | 1.0 |
+| Версия | 1.1 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-11 (PR #3) |
@@ -317,7 +317,7 @@
 | все | Каналы WebSocket и команды — через `WsChannelHandler` в `api/ws.py`, регистрируемый в `ModuleDefinition.ws_handlers`; модели `payload` — `public/ws_messages.py`; события — `public/events.py` (подклассы `BaseEvent`); декларации — `public/topics.py` (`TOPICS`), `schedules.py`; публикация только `OutboxPublisher`; консьюмеры — `@idempotent_consumer`, `group_id = flt.<module>.<handler>`; таблицы `outbox`, `processed_events`, при заданиях — `jobs`, при расписаниях — `scheduled_runs` создаются миграцией модуля из деклараций shared kernel; контракт `api/asyncapi.yaml` и тест `tests/contracts/test_asyncapi_<module>.py` |
 | shared kernel (`app/core/ws`) | эндпоинты `/ws` и `/ws/agent`, `WsEnvelope`, реестр обработчиков, подписки, лимиты, heartbeat, бинарные кадры, `WsPublisher`, мост Redis pub/sub, коды закрытия, graceful shutdown |
 | shared kernel (`app/core/kafka`) | `EventEnvelope`, `BaseEvent`, `TopicDeclaration`, `OutboxPublisher`, relay, `@idempotent_consumer`, ретраи и DLQ, `JobRunner`, `JobCommand`, планировщик, команды `dlq replay`/`dlq list`/`topics apply`, создание топиков в роли `migrate`, метрики |
-| identity | события `identity.user_registered`, `identity.user_blocked`, `identity.session_revoked`, `identity.user_deleted` (ADR-006); отзыв сессии → `publish_to_user` с типом `identity.session.revoked` и закрытие `4401` |
+| identity | события `identity.user_registered`, `identity.user_suspended`, `identity.session_revoked`, `identity.user_deleted` (ADR-006); отзыв сессии → `publish_to_user` с типом `identity.session.revoked` и закрытие `4401` |
 | llm_gateway | канал `llm_gateway.stream:<correlation_id>` и команды `llm_gateway.completion.request`/`cancel`, события стрима `start/delta/end/error` (ADR-009, SYS-08); на этапе 1 — первый `WsChannelHandler` и первый контракт `asyncapi.yaml` |
 | local_runtime (этап 4) | обработчик `/ws/agent`, белый список типов агента, реестр и каналы `inbox`/`reply`, контракт `Analytics/Specs/local_runtime/api/asyncapi.yaml`, пакет `flt_protocol` |
 | frontend (`src/lib/ws`) | клиент: один сокет, конверт, подписки с `state_url`, backoff, обработка кодов закрытия, zod-схемы из `asyncapi.yaml` |
@@ -773,3 +773,4 @@ class CompletionStreamHandler(WsChannelHandler):
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R21 — поле `visibility` (`internal` по умолчанию, `public` — для других модулей и плагинов, согласовано с SYS-09-R12) у `TopicDeclaration`, `topics.py` в `public/` по ADR-002 v1.1, исключение раздела 6 для R21 снято; пути тестов N3 — `tests/n_instances/core/`; уведомления — модуль `notifications`; раздел 9 — статусы OQ-17, OQ-49, OQ-70; пути тестов N3 R2, R24, R26 — `tests/n_instances/core/`; R21 — без упоминания `brokers/topics.py` | draft |
 | 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
+| 1.1 | 2026-10-11 | пользователь | Термин отключения аккаунта: событие `identity.user_suspended` вместо `identity.user_blocked` в разделе 4 (OQ-83, PR #4); требования не менялись | approved |
