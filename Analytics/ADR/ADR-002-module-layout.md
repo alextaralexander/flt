@@ -165,7 +165,7 @@
 
 ### 3.1. Структура каталогов
 
-```
+```text
 src/backend/py-monolyth/
   .importlinter                      # контракты границ (раздел 3.5)
   alembic.ini                        # секция [<module>] на каждый модуль (раздел 3.4)

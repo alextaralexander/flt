@@ -267,7 +267,7 @@
 
 ### Пример 1. Структура ресурсов и ключ с множественным числом (SYS-07-R7, SYS-07-R8)
 
-```
+```text
 src/lib/i18n/locales/ru/common.json
 src/lib/i18n/locales/en/common.json
 src/lib/i18n/locales/ar/common.json
