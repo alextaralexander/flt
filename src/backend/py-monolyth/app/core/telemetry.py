@@ -13,7 +13,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 
-SERVICE_NAME = "python_boilerplate"
+SERVICE_NAME = "flt-backend"
 
 # ProxyTracer: резолвится в реальный tracer после setup_telemetry().
 tracer = trace.get_tracer(SERVICE_NAME)

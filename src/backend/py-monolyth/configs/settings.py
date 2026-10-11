@@ -199,7 +199,7 @@ class Settings(BaseSettings):
     @property
     def open_search_service_name(self) -> str:
         """Значение поля `service_name` в записях логов OpenSearch."""
-        return f"{self.STAND_NAME}.python_boilerplate"
+        return f"{self.STAND_NAME}.flt-backend"
 
 
 settings = Settings()

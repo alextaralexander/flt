@@ -1,5 +1,5 @@
 ## ---------------------------------------------------------------------------
-## python-boilerplate — единая точка входа для разработки и агентов.
+## flt-backend — единая точка входа для разработки и агентов.
 ## Запусти `make help`, чтобы увидеть все цели.
 ## ---------------------------------------------------------------------------
 
@@ -73,7 +73,7 @@ test: ## Прогнать тесты
 test-cov: ## Тесты с отчётом покрытия (порог — fail_under в pyproject.toml)
 	$(RUN) pytest --cov=app --cov-report=term-missing
 
-TEST_PG_CONTAINER ?= python-boilerplate-test-pg
+TEST_PG_CONTAINER ?= flt-backend-test-pg
 TEST_PG_PORT ?= 54329
 
 test-docker: ## Тесты в одноразовом Postgres (docker run), без локальной инфраструктуры

@@ -1,7 +1,7 @@
 [project]
-name = "python-boilerplate"
+name = "flt-backend"
 version = "0.1.0"
-description = "Production FastAPI boilerplate: Kafka (FastStream), AsyncAPI, OTel, Vault."
+description = "FLT backend: modular monolith on FastAPI, Kafka (FastStream), PostgreSQL, Redis."
 requires-python = ">=3.14"
 # Диапазоны вместо жёстких пинов: точные версии фиксирует uv.lock,
 # обновление — `uv lock --upgrade` (или Renovate) + прогон `make check`.
