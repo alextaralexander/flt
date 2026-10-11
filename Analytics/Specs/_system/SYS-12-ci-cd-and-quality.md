@@ -3,7 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Статус | approved |
-| Версия | 1.0 |
+| Версия | 1.1 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-11 (PR #3) |
@@ -81,7 +81,7 @@
 
 ### SYS-12-R7 Линтеры и типы frontend
 
-- **Формулировка**: Код `src/frontend` должен проходить `eslint src e2e` по `eslint.config.js` (flat config) с правилами ADR-005 и локальными правилами `flt/*` (SYS-10), `prettier --check .`, `tsc --noEmit` (`strict`, `verbatimModuleSyntax`), `i18next-parser --fail-on-update --fail-on-warnings` (`i18n:check`), `api:check` (сгенерированный клиент и zod-схемы не расходятся с контрактами), `pnpm audit --prod --audit-level=high`; директивы `eslint-disable` и `@ts-expect-error` должны содержать имя правила и причину, `@ts-ignore` запрещён (`@typescript-eslint/ban-ts-comment`).
+- **Формулировка**: Код `src/frontend` должен проходить `eslint src e2e` по `eslint.config.js` (flat config) с правилами ADR-005 и локальными правилами `flt/*` (SYS-10), `prettier --check .`, `tsc --noEmit` (`strict`, `verbatimModuleSyntax`), `i18next-cli extract --ci && i18next-cli status` (`i18n:check`), `api:check` (сгенерированный клиент и zod-схемы не расходятся с контрактами), `pnpm audit --prod --audit-level=high`; директивы `eslint-disable` и `@ts-expect-error` должны содержать имя правила и причину, `@ts-ignore` запрещён (`@typescript-eslint/ban-ts-comment`).
 - **Обоснование**: CLAUDE.md «Frontend (boilerplate)» и «Правила для Claude» (`lint`, `check-types`, `test` перед коммитом); ADR-005, разделы 3.3, 3.5, 3.6; ADR-011 (состав job `frontend`).
 - **Проверка**: job `frontend`; правило `eslint-comments/require-description` (плагин `@eslint-community/eslint-plugin-eslint-comments`) в `eslint.config.js`; скрипт `pnpm check` (R34).
 - **Применимость**: frontend, CI.
@@ -755,3 +755,4 @@ echo "SMOKE OK"
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R5 — перевод PR в ready на шаге 9 (ADR-011 v1.1, CLAUDE.md), а не на шаге 11, чек-боксы шаблона PR и раздела 4; R2, R4 и пример `ci-ok` — job `dependency-audit` в быстрой ступени и в обязательных проверках; новые R35 (`dependency-audit`: pip-audit, pnpm audit, лицензии), R36 (Trivy в `images` и `release.yml`), R37 (axe WCAG 2.2 AA и Lighthouse CI в `e2e`), R38 (`flt-tools permissions check`, `modules check`, `deploy parity`), R39 (oasdiff в `contracts`); R23 — пути кассет по SYS-10; раздел 9 — OQ-70 resolved | draft |
 | 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
+| 1.1 | 2026-10-11 | пользователь | R-проверка frontend: `i18n:check` на `i18next-cli` вместо `i18next-parser` (Node 24; реализация Г.1, PR #5) | approved |

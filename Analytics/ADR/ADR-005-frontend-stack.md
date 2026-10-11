@@ -3,7 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Статус | accepted |
-| Версия | 1.0 |
+| Версия | 1.1 |
 | Дата | 2026-10-10 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-10 (PR #2) |
@@ -119,11 +119,13 @@
 | zustand | 4 | 5 | `vi.mock('zustand')` в `setup-tests.ts` обновляется под мок v5 |
 | react-hook-form, @hookform/resolvers | 7, 3 | 7, 5 | — |
 | axios | 1 | 1 | — |
-| i18next, react-i18next, i18next-browser-languagedetector, i18next-resources-to-backend, i18next-parser | — | 25, 16, 8, 1, 9 | новые |
+| i18next, react-i18next, i18next-browser-languagedetector, i18next-resources-to-backend, i18next-cli | — | 25, 16, 8, 1, 1 | новые; `i18next-cli` вместо `i18next-parser`, который не устанавливается на Node 24 (уточнено при реализации Г.1, PR #5) |
 | orval | — | 7 | новый (devDependency) |
 | @faker-js/faker | `@ngneat/falso` 7 | 10 | orval генерирует моки на faker; `falso` удаляется, `src/testing/data-generators.ts` переводится на faker |
 | @radix-ui/react-direction | — | 1 | новый (`DirectionProvider`) |
 | husky, lint-staged в `src/frontend` | 9, 15 | удаляются | хуки переезжают в корневой `.pre-commit-config.yaml` (ADR-011) |
+
+Фактические версии на момент реализации Г.1 (2026-10-11, PR #5) выше минимумов и соответствуют правилу «мажорная версия не моложе 60 дней»: Vite 8, Vitest 4, TypeScript 6, React Router 8 (library mode), Storybook 10, zod 4, orval 8. ESLint остаётся на 9: на ESLint 10 не работает плагин React; переход — мажорным PR Renovate (ADR-001).
 
 ### 3.2. Порядок миграции (шаги Г.1, каждый — отдельный коммит при зелёных `pnpm lint`, `pnpm check-types`, `pnpm test`, `pnpm build`)
 
@@ -163,7 +165,7 @@
   ```
   Shared-слой не знает о модулях: namespaces модулей регистрируются в `src/app/i18n-resources.ts` (слой `app` импортирует `features` — разрешено зонами ESLint). Загрузка ленивая (`import()`), ресурсы попадают в чанк модуля. `i18next-resources-to-backend` получает функцию `(lng, ns) => registry[ns][lng]()`.
 - Ключи: английские, вложенные через точку (`login.form.submit`), namespace через двоеточие (`identity:login.form.submit`); хук `useTranslation('identity')` в модуле. Эталонный язык ключей — `ru` (аудитория РФ, OQ-25); `en` и `ar` обязаны содержать те же ключи.
-- Контроль полноты: `i18next-parser` (конфиг `i18next-parser.config.ts`, `locales: ['ru','en','ar']`, `keepRemoved: false`); скрипт `i18n:extract` обновляет файлы, `i18n:check` (`i18next-parser --fail-on-update`) падает в CI при неизвлечённых или лишних ключах; пустые значения в `en`/`ar` запрещены (проверка — тот же скрипт с `--fail-on-warnings`).
+- Контроль полноты: `i18next-cli` (конфиг `i18next.config.ts`, `locales: ['ru','en','ar']`, удаление лишних ключей); скрипт `i18n:extract` (`i18next-cli extract`) обновляет файлы, `i18n:check` (`i18next-cli extract --ci && i18next-cli status`) падает в CI при неизвлечённых или лишних ключах и при пустых значениях в `en`/`ar`.
 - Типизация ключей: `src/types/i18next.d.ts` объявляет `CustomTypeOptions.resources` из `ru`-файлов (`common` + все модули) — опечатка в ключе ломает `pnpm check-types`.
 - Множественное число: суффиксы i18next v4 (`_zero`, `_one`, `_two`, `_few`, `_many`, `_other`) через `Intl.PluralRules`; интерполяция `{{count}}`. Даты и числа: `Intl.DateTimeFormat`/`Intl.NumberFormat` через `i18next` `interpolation.format`; система счисления для `ar` (`latn` или `arab`) — SYS-07. `dayjs` остаётся для вычислений с датами, локали `ru`, `en`, `ar` подключаются вместе с ресурсами.
 - Строки UI вне `t()` запрещены: правило `react/jsx-no-literals` в режиме `noStrings: true, ignoreProps: false, allowedStrings: []` для `src/features/**` и `src/components/**` (исключения — `*.stories.tsx`, `*.test.tsx`, `src/testing/**`).
@@ -392,3 +394,4 @@ VITE_DEV_BACKEND_URL=http://localhost:8000
 | 0.1 | 2026-10-10 | Claude | Черновик | proposed |
 | 0.2 | 2026-10-10 | Claude | Решение пользователя 2026-10-10: порог покрытия 70 % lines/functions/statements, 60 % branches, `src/app/routes` исключены. Согласование с ADR-012 и ADR-004 (без переписывания `/api` → `/v1`, путь `/ws`, поля конверта `channel` и `ts`), ADR-007 (dev-прокси `/flt-*`, запрет маршрутов с этим префиксом), ADR-011 (имена скриптов CI) | proposed |
 | 1.0 | 2026-10-10 | пользователь | Принят без изменений (PR #2, слияние в main) | accepted |
+| 1.1 | 2026-10-11 | пользователь | Без изменения решения, уточнения по реализации Г.1 (PR #5): `i18next-cli` вместо `i18next-parser` (Node 24); фиксация фактических версий выше минимумов; ESLint остаётся на 9 | accepted |

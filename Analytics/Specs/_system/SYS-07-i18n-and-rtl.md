@@ -3,7 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Статус | approved |
-| Версия | 1.0 |
+| Версия | 1.1 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-11 (PR #3) |
@@ -92,7 +92,7 @@
 
 - **Формулировка**: строки, зависящие от числа, должны объявляться ключами с суффиксами CLDR `_zero`, `_one`, `_two`, `_few`, `_many`, `_other` и интерполяцией `{{count}}` (ADR-005, 3.3: i18next v4 через `Intl.PluralRules`); для `ru` обязательны формы `one`, `few`, `many`, `other`; для `en` — `one`, `other`; для `ar` — все шесть; код не должен собирать множественное число конкатенацией или условиями (`count === 1 ? ... : ...`); библиотека `i18next-icu` не используется.
 - **Обоснование**: русский и арабский имеют соответственно 4 и 6 категорий CLDR; встроенный механизм i18next v4 покрывает их без ICU-синтаксиса, который требует второй грамматики ключей и увеличивает ресурсы; `i18next-icu` отклонён, потому что `Intl.PluralRules` уже даёт правильные категории, а ICU-форматы дат и чисел заменяет R19.
-- **Проверка**: `i18n:check` (R10) с правилом `i18next-parser` `pluralSeparator: '_'` и проверкой `plurals` — отсутствие формы категории для языка приводит к падению; unit-тест `src/lib/i18n/plurals.test.ts` (`<будет создан>`) на `t('common:lesson.minutes', {count})` для `count` ∈ {0, 1, 2, 3, 5, 11, 21, 100, 101} на трёх языках; ESLint `no-restricted-syntax` с селектором на тернарный оператор, оба операнда которого — вызовы `t()` с одинаковым префиксом ключа (`<будет создан>` в `eslint.config.js`).
+- **Проверка**: `i18n:check` (R10) с правилом `i18next-cli` `pluralSeparator: '_'` и проверкой `plurals` — отсутствие формы категории для языка приводит к падению; unit-тест `src/lib/i18n/plurals.test.ts` (`<будет создан>`) на `t('common:lesson.minutes', {count})` для `count` ∈ {0, 1, 2, 3, 5, 11, 21, 100, 101} на трёх языках; ESLint `no-restricted-syntax` с селектором на тернарный оператор, оба операнда которого — вызовы `t()` с одинаковым префиксом ключа (`<будет создан>` в `eslint.config.js`).
 - **Применимость**: frontend, CI.
 
 ### SYS-07-R9 Строки UI только через `t()`
@@ -104,7 +104,7 @@
 
 ### SYS-07-R10 Полнота переводов проверяется в CI для всех трёх языков
 
-- **Формулировка**: скрипт `pnpm i18n:check` (`i18next-parser --fail-on-update --fail-on-warnings`, конфиг `i18next-parser.config.ts` с `locales: ['ru','en','ar']`, `keepRemoved: false`, `defaultValue: ''`) должен падать, если (а) в коде есть ключ, которого нет в `ru`; (б) в `ru` есть ключ, не используемый в коде; (в) в `en` или `ar` отсутствует ключ из `ru` или его значение пустое; (г) в `en` или `ar` есть ключ, которого нет в `ru`; fallback арабского на английский в CI не допускается — он остаётся только средой выполнения (`fallbackLng: { ar: ['en', 'ru'], en: ['ru'], default: ['ru'] }`) для ключей, добавленных плагинами (SYS-09, SYS-13).
+- **Формулировка**: скрипт `pnpm i18n:check` (`i18next-cli extract --ci && i18next-cli status`, конфиг `i18next.config.ts` с `locales: ['ru','en','ar']`, `keepRemoved: false`, `defaultValue: ''`) должен падать, если (а) в коде есть ключ, которого нет в `ru`; (б) в `ru` есть ключ, не используемый в коде; (в) в `en` или `ar` отсутствует ключ из `ru` или его значение пустое; (г) в `en` или `ar` есть ключ, которого нет в `ru`; fallback арабского на английский в CI не допускается — он остаётся только средой выполнения (`fallbackLng: { ar: ['en', 'ru'], en: ['ru'], default: ['ru'] }`) для ключей, добавленных плагинами (SYS-09, SYS-13).
 - **Обоснование**: ADR-005, 3.3 («пустые значения в `en`/`ar` запрещены»); вариант «арабский допускает fallback с предупреждением» отклонён: предупреждение в CI никто не читает, и арабский интерфейс через два этапа становится наполовину английским. Fallback во время выполнения нужен только для ресурсов плагинов, которые проект не контролирует.
 - **Проверка**: шаг `pnpm i18n:check` в job `frontend` (ADR-011, SYS-12); негативный тест `src/testing/architecture/i18n-check-fails.test.ts` (`<будет создан>`): временный файл с ключом только в `ru` приводит к ненулевому коду возврата парсера.
 - **Применимость**: frontend, CI.
@@ -415,7 +415,7 @@ export function formatDateTime(iso: string, lng: UiLanguage, timeZone: string): 
 
 | ADR | Связь | Что берётся |
 |---|---|---|
-| [ADR-005](../../ADR/ADR-005-frontend-stack.md) | основан на | i18next с namespace на модуль, `i18next-parser`, суффиксы множественного числа, `react/jsx-no-literals`, `DirectionProvider`, правило `flt/no-physical-direction-classes`, проекты Playwright, CSP `font-src 'self'`; ADR делегирует SYS-07 порядок определения языка, хранение выбора, систему счисления, шрифты, bidi |
+| [ADR-005](../../ADR/ADR-005-frontend-stack.md) | основан на | i18next с namespace на модуль, `i18next-cli` (вместо `i18next-parser`, см. ADR-005 1.1), суффиксы множественного числа, `react/jsx-no-literals`, `DirectionProvider`, правило `flt/no-physical-direction-classes`, проекты Playwright, CSP `font-src 'self'`; ADR делегирует SYS-07 порядок определения языка, хранение выбора, систему счисления, шрифты, bidi |
 | [ADR-006](../../ADR/ADR-006-authentication-and-authorization.md) | основан на | колонка `users.ui_language` в модуле `identity` |
 | [ADR-002](../../ADR/ADR-002-module-layout.md) | основан на | раскладка `app/modules/<module>/{templates,locales}`, `app/core/i18n` в shared kernel |
 | [ADR-004](../../ADR/ADR-004-communication-patterns.md) | уточняет | поле `locale` в событиях (формат R25), `message_key` в сообщениях WebSocket |
@@ -431,6 +431,7 @@ export function formatDateTime(iso: string, lng: UiLanguage, timeZone: string): 
 | [OQ-25](../../open-questions.md) | Язык интерфейса по умолчанию и порядок определения | да | planned → решает SYS-07 (R3, R4, R6): профиль → cookie `flt_ui_language` → `Accept-Language`/`navigator.languages` → `ru`; без префикса в URL |
 | [OQ-49](../../open-questions.md) | Модуль-владелец уведомлений | нет | planned → SYS-01 (черновик SYS-01 решает: отдельный модуль `notifications`, этап 5); R13 применяется к `notifications` и к транзакционным письмам `identity` |
 | [OQ-82](../../open-questions.md) | Перечень зеркалируемых иконок (R18) и `allowedStrings` правила `react/jsx-no-literals` (R9) | нет | open: стартовые перечни зафиксированы здесь, окончательные — после ревью на этапе 2 |
+| [OQ-85](../../open-questions.md) | Временное исключение демо-фич из R9 и R18 (`DEMO_PATHS`) | нет | resolved: до Г.7, удаляется вместе с демо-фичами |
 | [OQ-44](../../open-questions.md) | Точный перечень европейских языков | нет | planned → ТЗ STU-08; реестр R24 принимает любой набор кодов |
 
 ## 10. История изменений
@@ -440,3 +441,4 @@ export function formatDateTime(iso: string, lng: UiLanguage, timeZone: string): 
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: шапка — `timezone` хранится в `identity.users` (как в разделе 4 и SYS-01), а не в `learner_profile`; R9 и R18 — стартовые перечни `allowedStrings` и зеркалируемых иконок, окончательные — OQ-82; раздел 9 — OQ-82; путь теста реестра промптов — `tests/modules/llm_gateway/unit/` (раскладка SYS-10) | draft |
 | 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
+| 1.1 | 2026-10-11 | пользователь | `i18next-parser` заменён на `i18next-cli` (не устанавливается на Node 24; реализация Г.1, PR #5), R10 и R8 — команды и конфиг `i18next.config.ts`; раздел 9 — OQ-85 (временное исключение демо-фич) | approved |

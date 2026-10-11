@@ -572,6 +572,8 @@ def redis_command_violations(root: Path) -> list[str]:
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
                 and node.func.attr in REDIS_SCAN_COMMANDS
+                # у Redis `KEYS` шаблон обязателен: `dict.keys()` без аргументов — не нарушение (SYS-05-R14)
+                and not (node.func.attr == "keys" and not node.args and not node.keywords)
             ):
                 violations.append(f"{rel}:{node.lineno}: вызов .{node.func.attr}()")
     return violations

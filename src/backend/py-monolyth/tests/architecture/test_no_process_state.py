@@ -172,6 +172,16 @@ class TestNoKeysOrUnscopedScan:
             "app/modules/rogue/services/cache.py:31: вызов .scan_iter()",
         ]
 
+    def test_dict_keys_without_pattern_is_allowed(self, tmp_path: Path) -> None:
+        """`dict.keys()` без аргументов не путается с командой Redis `KEYS <шаблон>`."""
+        module_dir = tmp_path / "app" / "modules" / "rogue" / "services"
+        module_dir.mkdir(parents=True)
+        (module_dir / "mapping.py").write_text(
+            "def names(mapping, redis):\n    list(mapping.keys())\n    redis.keys('rogue:*')\n",
+            encoding="utf-8",
+        )
+        assert checks.redis_command_violations(tmp_path) == ["app/modules/rogue/services/mapping.py:3: вызов .keys()"]
+
 
 @pytest.mark.req("SYS-05-R11")
 class TestRedisKeysAreNamespaced:

@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | review |
+| Статус | approved |
 | Версия | 2.0 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
@@ -218,8 +218,8 @@
 
   | Контейнер | compose `healthcheck.test` | interval / timeout / retries / start_period | Helm liveness / readiness / startup |
   |---|---|---|---|
-  | `api` | `wget -qO- http://127.0.0.1:8000/v1/ready` | 10s / 3s / 3 / 30s | `GET /v1/health` 10s, `failureThreshold 3` / `GET /v1/ready` 5s / `GET /v1/health` 2s, `failureThreshold 30` |
-  | `worker`, `media-agent` | `wget -qO- http://127.0.0.1:8001/v1/ready` | 10s / 3s / 3 / 30s | как `api` на порту 8001 |
+  | `api` | `python -c` с `urllib.request` на `http://127.0.0.1:8000/v1/ready` (в образе `flt-backend` нет `wget`) | 10s / 3s / 3 / 30s | `GET /v1/health` 10s, `failureThreshold 3` / `GET /v1/ready` 5s / `GET /v1/health` 2s, `failureThreshold 30` |
+  | `worker`, `media-agent` | `python -c` с `urllib.request` на `http://127.0.0.1:8001/v1/ready` | 10s / 3s / 3 / 30s | как `api` на порту 8001 |
   | `haproxy` | `wget -qO- http://127.0.0.1:8404/stats;csv` | 5s / 3s / 3 / 5s | tcp 8404 / `GET /healthz` на 80 (ADR-012) |
   | `frontend` | `wget -qO- http://127.0.0.1:8080/healthz` | 10s / 3s / 3 / 5s | `GET /healthz` / `GET /healthz` |
   | `postgres` | `pg_isready -U $POSTGRES_USER -d flt` | 5s / 5s / 20 / 10s | `exec pg_isready` / то же |
@@ -454,7 +454,7 @@ services:
     environment: { APP_ROLE: api, STAND_NAME: ${STAND_NAME:-dev}, TZ: UTC }
     expose: ["8000"]
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8000/v1/ready"]
+      test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(urllib.request.urlopen('http://127.0.0.1:8000/v1/ready', timeout=2).status != 200)"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -752,3 +752,4 @@ verify_through_haproxy        # /healthz 200, jwks 200, 3× be_api UP
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: R4 — контейнер `blackbox-exporter` (профиль `prod`, внешняя доступность и срок TLS-сертификата), тег `minio/mc` закрепляется вместе с тегом сервера; R5 — `blackbox-exporter` в профиле `prod`; R6 — chart `prometheus-community` для `blackbox-exporter`; R13 — порт 9115 внутри сети, проверка снятия `X-Instance-Id` в HAProxy (SYS-05-R5); R18 — второе хранилище — OQ-79, RPO и RTO — по SYS-02; R23 п. 9 — шифрование диска — SYS-02-R61, OQ-80; раздел 9 — статус OQ-17, добавлены OQ-79, OQ-80; раздел 9 — OQ-63 resolved | draft |
 | 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
 | 2.0 | 2026-10-11 | Claude | R10 и раздел 4: настройка `MIGRATE_ON_START` удалена по SYS-05-R33 и SDD_plan.md (Г.1); на утверждение в PR Г.1 | review |
+| 2.0 | 2026-10-11 | пользователь | Утверждена (PR #5); при утверждении: healthcheck ролей `api`, `worker`, `media-agent` — `python -c` с `urllib.request`, в образе `flt-backend` нет `wget` | approved |

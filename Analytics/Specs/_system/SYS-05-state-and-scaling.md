@@ -3,7 +3,7 @@
 | Поле | Значение |
 |---|---|
 | Статус | approved |
-| Версия | 1.0 |
+| Версия | 1.1 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-11 (PR #3) |
@@ -158,7 +158,7 @@
 
 - **Формулировка**: Код приложения не должен вызывать команды Redis `KEYS`, `FLUSHALL`, `FLUSHDB` и `SCAN` без шаблона `MATCH <module>:*`; единственная точка `SCAN` — метод `ModuleRedis.scan_module_keys(pattern)` с принудительным префиксом модуля, доступный только командам CLI (`python -m app redis ...`) и тестовым фикстурам.
 - **Обоснование**: `KEYS` блокирует Redis на всё время обхода и ломает задержку всех инстансов; обход чужих префиксов нарушает границу модуля (ADR-002).
-- **Проверка**: архитектурный тест `tests/architecture/test_redis_commands.py::test_no_keys_or_unscoped_scan` (будет создан: AST-поиск вызовов `.keys(`, `.scan(`, `.scan_iter(`, `.flushdb(`, `.flushall(` в `app/`, разрешён только `app/core/dao/caching/module_redis.py`); unit-тест `test_scan_module_keys_forces_prefix`; `rename-command KEYS ""` в конфигурации Redis стендов dev, test, prod (SYS-11).
+- **Проверка**: архитектурный тест `tests/architecture/test_redis_commands.py::test_no_keys_or_unscoped_scan` (AST-поиск вызовов `.keys(<шаблон>)` с аргументом — у Redis `KEYS` шаблон обязателен, поэтому `dict.keys()` без аргументов не считается нарушением, — а также `.scan(`, `.scan_iter(`, `.flushdb(`, `.flushall(` в `app/`; разрешён только `app/core/dao/caching/module_redis.py`); unit-тест `test_scan_module_keys_forces_prefix`; `rename-command KEYS ""` в конфигурации Redis стендов dev, test, prod (SYS-11).
 - **Применимость**: backend, deploy.
 
 ### SYS-05-R15 Поведение при недоступности Redis
@@ -798,6 +798,7 @@ async def test_scenario_survives_instance_stop(stand: Stand, on_instance: OnInst
 | SYS-05-R1, SYS-05-R2 | `configs/settings.py`: объекты настроек, `functools.lru_cache` на `get_settings()` | неизменяемая конфигурация, загружается при старте (ADR-003, правило 5) | бессрочно | Claude (черновик), подтверждается на G1 |
 | SYS-05-R1 | `app/modules/registry.py::MODULES`, `app/core/modules.py` (реестр `ModuleDefinition`), реестр `prometheus_client`, скомпилированные Lua-скрипты `app/core/dao/caching/scripts.py`, таблица обработчиков каналов WebSocket `app/core/ws/registry.py` (заполняется при старте, далее только чтение) | неизменяемая конфигурация | бессрочно | Claude (черновик), подтверждается на G1 |
 | SYS-05-R1 | `app/core/ws/connections.py`: таблица «канал → локальные соединения» инстанса | состояние соединений самого процесса, не данных пользователя; при остановке соединения закрываются, клиент переподключается (ADR-004, раздел 3.3) | бессрочно | Claude (черновик), подтверждается на G1 |
+| SYS-05-R1 | `app/core/dao/db_helpers/db_connection.py`: `_engine`, `_session_maker`; `app/core/dao/caching/redis_conn.py`: `_redis_client`, `_redis_client_loop` | пул соединений PostgreSQL и клиент Redis процесса создаются лениво и переиспользуются (ADR-003, правило 9); данных пользователей не содержат, закрываются в lifespan | бессрочно | пользователь, 2026-10-11 (PR #5) |
 | SYS-05-R2 | `app/core/health.py`: кэш результата readiness на 5 с | защита от шторма проверок HAProxy, compose и probes (ADR-010, раздел 3.4) | бессрочно | Claude (черновик), подтверждается на G1 |
 | SYS-05-R3 | `cli/` (скаффолдер пишет исходники), `app/*/migrations/` (не runtime) | не выполняются в инстансе | бессрочно | Claude (черновик), подтверждается на G1 |
 | SYS-05-R8 | `llm_gateway.provider_keys.ciphertext`, `.nonce`; `identity.refresh_tokens.token_hash`; `identity.one_time_tokens.token_hash` | криптографический материал до 4 КБ (ADR-003, п. 2.8 A; ADR-006; ADR-013) | бессрочно | Claude (черновик), подтверждается на G1 |
@@ -852,3 +853,4 @@ async def test_scenario_survives_instance_stop(stand: Stand, on_instance: OnInst
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: пути REST в примерах — сегмент `learning-plan` (SYS-03-R1); проверки кода ошибки в примерах — по конверту SYS-03-R7 (`messages.ERROR[0].code`, `assessment.quick_test_unavailable`); раздел 7 — коды `core.version_conflict` и `<module>.<state_error>`; ключ состояния быстрого теста — по анонимной сессии `flt_anon_session` (OQ-77); раздел 9 — OQ-77; таблица TTL Redis — ключ `Idempotency-Key` (SYS-03-R18) | draft |
 | 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
+| 1.1 | 2026-10-11 | пользователь | Уточнения по реализации Г.2 (PR #5): R14 — проверка `.keys(` только с аргументом (без ложных срабатываний на `dict.keys()`); раздел 6 — исключение для пула PostgreSQL и клиента Redis процесса | approved |
