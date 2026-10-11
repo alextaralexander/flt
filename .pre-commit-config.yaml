@@ -1,0 +1,118 @@
+# Единый pre-commit репозитория FLT (ADR-011 §3.7, SYS-12-R11).
+# Установка: `uvx pre-commit install` (хуки pre-commit) в корне репозитория.
+# Полный прогон: `uvx pre-commit run --all-files`.
+# Каждый хук ограничен `files:` своего компонента и имеет эквивалентный шаг в
+# .github/workflows/ci.yml: CI — источник истины, pre-commit только ускоряет цикл.
+# Хуки, для которых ещё нет инструментов, добавляются вместе с ними:
+# commitlint и spectral — этап 1 Г.10 (src/tools), helm lint — Г.8 (deploy/helm/flt),
+# hadolint и shellcheck — вместе с шагами CI (SYS-12-R10).
+repos:
+  # --- Backend и Python-пакеты репозитория ---------------------------------------------------
+  # Линт, сортировка импортов и форматирование; конфигурация — pyproject.toml каждого пакета.
+  # CI: backend-quality (`make format-check lint`, ruff в src/protocol).
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.0
+    hooks:
+      - id: ruff-check
+        args: ["--fix"]
+        files: ^src/(backend/py-monolyth|protocol|tools|agent)/
+      - id: ruff-format
+        files: ^src/(backend/py-monolyth|protocol|tools|agent)/
+
+  # Соответствие uv.lock и pyproject.toml каждого uv-проекта. CI: backend-quality (`uv lock --check`).
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.13.0
+    hooks:
+      - id: uv-lock
+        name: uv-lock (backend)
+        args: ["--project", "src/backend/py-monolyth"]
+        files: ^src/backend/py-monolyth/(pyproject\.toml|uv\.lock)$
+      - id: uv-lock
+        name: uv-lock (protocol)
+        args: ["--project", "src/protocol"]
+        files: ^src/protocol/(pyproject\.toml|uv\.lock)$
+
+  # Статический анализ безопасности (тесты исключены). CI: backend-quality (`make security`).
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4
+    hooks:
+      - id: bandit
+        args: ["-c", "src/backend/py-monolyth/pyproject.toml"]
+        additional_dependencies: ["bandit[toml]"]
+        files: ^src/(backend|protocol|tools|agent)/
+        exclude: /tests/
+
+  # Поиск секретов по всему репозиторию с базлайном в корне (ADR-011 §3.6, SYS-12-R23).
+  # Lock-файлы исключены: хэши пакетов дают ложные срабатывания энтропийных детекторов;
+  # исключения повторяют filters_used базлайна. Пересборка базлайна после ревью находок:
+  # `uvx --from detect-secrets==1.5.0 detect-secrets scan --baseline .secrets.baseline`.
+  # CI: backend-quality (шаг detect-secrets по всему репозиторию).
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: (^|/)(uv\.lock|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|\.secrets\.baseline)$
+
+  # --- Документация и workflow-ы -------------------------------------------------------------
+  # markdownlint по .markdownlint-cli2.yaml (SYS-12-R8). CI: docs.
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.23.3
+    hooks:
+      - id: markdownlint-cli2
+        files: ^(Analytics/.*\.md|CLAUDE\.md|README\.md)$
+
+  # Проверка workflow-ов GitHub Actions (SYS-12-R12). CI: docs.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+
+  # Общие проверки (SYS-12-R11). end-of-file-fixer и trailing-whitespace подключаются после
+  # Г.1 backend и frontend: сейчас они правят файлы boilerplate (env-файлы, шаблоны, svg),
+  # а markdown-переносы из двух пробелов в BRD значимы — правило хвостовых пробелов для
+  # документов проверяет markdownlint (MD009).
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+        exclude: ^deploy/helm/.*/templates/
+      - id: check-merge-conflict
+      - id: no-commit-to-branch
+        args: ["--branch", "main"]
+
+  # --- Локальные хуки: вызывают те же цели make и скрипты pnpm, что и CI ---------------------
+  - repo: local
+    hooks:
+      # Границы модулей backend: import-linter по .importlinter (ADR-002). CI: architecture (`make arch`).
+      - id: lint-imports
+        name: import-linter (backend, ADR-002)
+        entry: make -C src/backend/py-monolyth arch
+        language: system
+        pass_filenames: false
+        files: ^src/backend/py-monolyth/(app/|configs/|\.importlinter$)
+
+      # mypy strict для backend (SYS-12-R11). CI: backend-quality (`make typecheck`).
+      - id: mypy-backend
+        name: mypy strict (backend)
+        entry: make -C src/backend/py-monolyth typecheck
+        language: system
+        pass_filenames: false
+        files: ^src/backend/py-monolyth/.*\.py$
+
+      # mypy strict для пакета flt-protocol (ADR-008). CI: backend-quality (шаги src/protocol).
+      - id: mypy-protocol
+        name: mypy strict (protocol)
+        entry: bash -c 'cd src/protocol && uv run --locked mypy'
+        language: system
+        pass_filenames: false
+        files: ^src/protocol/.*\.py$
+
+      # ESLint --fix и Prettier --write для индексированных файлов фронтенда (ADR-005).
+      # CI: frontend (`pnpm lint`, `pnpm format:check`).
+      - id: frontend-lint-staged
+        name: lint-staged (frontend)
+        entry: pnpm --dir=src/frontend exec lint-staged
+        language: system
+        pass_filenames: false
+        files: ^src/frontend/
