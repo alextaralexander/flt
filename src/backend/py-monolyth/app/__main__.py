@@ -10,9 +10,11 @@
 
 `python -m app healthcheck` — проверка `/v1/health` на порту роли (HEALTHCHECK Docker-образа).
 Миграции инстансами при старте не выполняются: это отдельный шаг роли `migrate` (ADR-003).
-Создание топиков Kafka, `storage-init` и шаблоны индексов роль `migrate` получает на этапе 1 Г.4.
+Роль `migrate` также создаёт топики Kafka и их DLQ по декларациям модулей; `storage-init` и шаблоны
+индексов она получает вместе с хранилищем и поиском (этап 1 Г.4).
 """
 
+import asyncio
 import sys
 import urllib.request
 from collections.abc import Sequence
@@ -21,7 +23,9 @@ import uvicorn
 from alembic import command
 from alembic.config import Config
 
+from app.core.kafka.topics_admin import apply_topics
 from app.core.logging import app_logger, logger_settings
+from app.core.modules import load_modules
 from app.main import create_app, create_worker_app
 from app.modules.registry import MODULES
 from configs.settings import AppRole, settings
@@ -65,6 +69,14 @@ def run_migrations(modules: Sequence[str] = MODULES) -> None:
     app_logger.info("Миграции завершены", modules=len(modules))
 
 
+def run_migrate(modules: Sequence[str] = MODULES) -> None:
+    """Роль `migrate`: миграции модулей, затем топики Kafka и их DLQ по декларациям (SYS-04-R23)."""
+    run_migrations(modules)
+    declarations = [topic for module in load_modules(modules) for topic in module.topics]
+    created = asyncio.run(apply_topics(declarations))
+    app_logger.info("Топики Kafka готовы", declared=len(declarations), created=len(created))
+
+
 def healthcheck(role: AppRole) -> int:
     """Код возврата проверки `/v1/health` на порту роли; у ролей без HTTP проверять нечего (0)."""
     if role is AppRole.MIGRATE:
@@ -104,7 +116,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         case AppRole.WORKER:
             run_worker()
         case AppRole.MIGRATE:
-            run_migrations()
+            run_migrate()
         case AppRole.MEDIA_AGENT:
             app_logger.error("Роль media_agent появится на этапе 6 вместе с LiveKit (ADR-015).")
             return 2

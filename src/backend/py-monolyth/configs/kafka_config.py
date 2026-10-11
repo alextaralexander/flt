@@ -36,6 +36,11 @@ class KafkaSettings(BaseSettings):
         default=DEFAULT_KAFKA_MESSAGE_MAX_BYTES,
         description="Максимальный размер публикуемого сообщения, байт.",
     )
+    KAFKA_REPLICATION_FACTOR: int = Field(
+        default=1,
+        ge=1,
+        description="replication.factor создаваемых топиков: 1 в docker-compose, 3 в Kubernetes (SYS-04-R23).",
+    )
 
     def client_id(self, role: str) -> str:
         """client_id инстанса: `flt-<role>-<instance_id>` (ADR-004, раздел 3.5)."""
