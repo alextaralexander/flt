@@ -1,5 +1,6 @@
 import type * as React from 'react';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
 
 import logo from '@/assets/logo.svg';
@@ -7,6 +8,7 @@ import { Head } from '@/components/seo/head';
 import { Link } from '@/components/ui/link/link';
 import { paths } from '@/config/paths';
 import { useUser } from '@/lib/auth';
+import { ExtensionSlot } from '@/lib/extension-points/extension-slot';
 
 type LayoutProps = {
   children: React.ReactNode;
@@ -14,6 +16,7 @@ type LayoutProps = {
 };
 
 export const AuthLayout = ({ children, title }: LayoutProps) => {
+  const { t } = useTranslation();
   const user = useUser();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get('redirectTo');
@@ -32,13 +35,23 @@ export const AuthLayout = ({ children, title }: LayoutProps) => {
     <>
       <Head title={title} />
       <div className="flex min-h-screen flex-col justify-center bg-gray-50 py-12 sm:px-6 lg:px-8">
+        <div className="absolute inset-e-4 top-4 flex gap-2">
+          <ExtensionSlot
+            id="app.header.actions"
+            context={{ user: user.data ?? null }}
+          />
+        </div>
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
           <div className="flex justify-center">
             <Link
               className="flex items-center text-white"
               to={paths.home.getHref()}
             >
-              <img className="h-24 w-auto" src={logo} alt="Workflow" />
+              <img
+                className="h-24 w-auto"
+                src={logo}
+                alt={t('layout.logo-alt')}
+              />
             </Link>
           </div>
 

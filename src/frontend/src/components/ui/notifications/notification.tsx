@@ -1,12 +1,12 @@
-import { Info, CircleAlert, CircleX, CircleCheck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+
+import { Icon } from '@/components/ui/icon';
 
 const icons = {
-  info: <Info className="size-6 text-blue-500" aria-hidden="true" />,
-  success: <CircleCheck className="size-6 text-green-500" aria-hidden="true" />,
-  warning: (
-    <CircleAlert className="size-6 text-yellow-500" aria-hidden="true" />
-  ),
-  error: <CircleX className="size-6 text-red-500" aria-hidden="true" />,
+  info: <Icon name="Info" className="size-6 text-blue-500" />,
+  success: <Icon name="CircleCheck" className="size-6 text-green-500" />,
+  warning: <Icon name="CircleAlert" className="size-6 text-yellow-500" />,
+  error: <Icon name="CircleX" className="size-6 text-red-500" />,
 };
 
 export type NotificationProps = {
@@ -23,6 +23,7 @@ export const Notification = ({
   notification: { id, type, title, message },
   onDismiss,
 }: NotificationProps) => {
+  const { t } = useTranslation();
   return (
     <div className="flex w-full flex-col items-center space-y-4 sm:items-end">
       <div className="pointer-events-auto w-full max-w-sm overflow-hidden rounded-lg bg-white shadow-lg ring-1 ring-black/5">
@@ -40,8 +41,8 @@ export const Notification = ({
                   onDismiss(id);
                 }}
               >
-                <span className="sr-only">Close</span>
-                <CircleX className="size-5" aria-hidden="true" />
+                <span className="sr-only">{t('ui.close')}</span>
+                <Icon name="CircleX" className="size-5" />
               </button>
             </div>
           </div>

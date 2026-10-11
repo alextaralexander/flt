@@ -1,5 +1,5 @@
-import { Home, PanelLeft, Folder, Users, User2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { NavLink, useNavigate, useNavigation } from 'react-router';
 
 import logo from '@/assets/logo.svg';
@@ -16,25 +16,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown/dropdown';
+import { Icon } from '@/components/ui/icon';
+import type { IconName } from '@/components/ui/icons/registry';
 import { Link } from '@/components/ui/link/link';
 import { paths } from '@/config/paths';
-import { useLogout } from '@/lib/auth';
+import { useLogout, useUser } from '@/lib/auth';
 import { ROLES, useAuthorization } from '@/lib/authorization';
+import { ExtensionSlot } from '@/lib/extension-points/extension-slot';
 import { cn } from '@/utils/cn';
 
 type SideNavigationItem = {
-  name: string;
+  name: 'dashboard' | 'discussions' | 'users';
   to: string;
-  icon: (props: React.SVGProps<SVGSVGElement>) => React.JSX.Element;
+  icon: IconName;
 };
 
 const Logo = () => {
+  const { t } = useTranslation();
   return (
     <Link className="flex items-center text-white" to={paths.home.getHref()}>
-      <img className="h-8 w-auto" src={logo} alt="Workflow" />
-      <span className="text-sm font-semibold text-white">
-        Bulletproof React
-      </span>
+      <img className="h-8 w-auto" src={logo} alt={t('layout.logo-alt')} />
+      <span className="text-sm font-semibold text-white">{t('app.name')}</span>
     </Link>
   );
 };
@@ -81,19 +83,58 @@ const Progress = () => {
   );
 };
 
+const NavItems = ({
+  navigation,
+  exactMatch,
+}: {
+  navigation: SideNavigationItem[];
+  exactMatch: (item: SideNavigationItem) => boolean;
+}) => {
+  const { t } = useTranslation();
+  return navigation.map((item) => (
+    <NavLink
+      key={item.name}
+      to={item.to}
+      end={exactMatch(item)}
+      className={({ isActive }) =>
+        cn(
+          'text-gray-300 hover:bg-gray-700 hover:text-white',
+          'group flex w-full flex-1 items-center rounded-md p-2 text-base font-medium',
+          isActive && 'bg-gray-900 text-white',
+        )
+      }
+    >
+      <Icon
+        name={item.icon}
+        className={cn(
+          'text-gray-400 group-hover:text-gray-300',
+          'me-4 size-6 shrink-0',
+        )}
+      />
+      {t(`layout.nav.${item.name}`)}
+    </NavLink>
+  ));
+};
+
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const user = useUser();
   const logout = useLogout({
     onSuccess: () => navigate(paths.auth.login.getHref(location.pathname)),
   });
   const { checkAccess } = useAuthorization();
   const navigation = [
-    { name: 'Dashboard', to: paths.app.dashboard.getHref(), icon: Home },
-    { name: 'Discussions', to: paths.app.discussions.getHref(), icon: Folder },
+    { name: 'dashboard', to: paths.app.dashboard.getHref(), icon: 'House' },
+    {
+      name: 'discussions',
+      to: paths.app.discussions.getHref(),
+      icon: 'Folder',
+    },
     checkAccess({ allowedRoles: [ROLES.ADMIN] }) && {
-      name: 'Users',
+      name: 'users',
       to: paths.app.users.getHref(),
-      icon: Users,
+      icon: 'Users',
     },
   ].filter(Boolean) as SideNavigationItem[];
 
@@ -104,29 +145,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-16 shrink-0 items-center px-4">
             <Logo />
           </div>
-          {navigation.map((item) => (
-            <NavLink
-              key={item.name}
-              to={item.to}
-              end={item.name !== 'Discussions'}
-              className={({ isActive }) =>
-                cn(
-                  'text-gray-300 hover:bg-gray-700 hover:text-white',
-                  'group flex w-full flex-1 items-center rounded-md p-2 text-base font-medium',
-                  isActive && 'bg-gray-900 text-white',
-                )
-              }
-            >
-              <item.icon
-                className={cn(
-                  'text-gray-400 group-hover:text-gray-300',
-                  'me-4 size-6 shrink-0',
-                )}
-                aria-hidden="true"
-              />
-              {item.name}
-            </NavLink>
-          ))}
+          <NavItems
+            navigation={navigation}
+            exactMatch={(item) => item.name !== 'discussions'}
+          />
         </nav>
       </aside>
       <div className="flex flex-col sm:gap-4 sm:py-4 sm:ps-60">
@@ -135,8 +157,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <Drawer>
             <DrawerTrigger asChild>
               <Button size="icon" variant="outline" className="sm:hidden">
-                <PanelLeft className="size-5" />
-                <span className="sr-only">Toggle Menu</span>
+                <Icon name="PanelLeft" className="size-5" />
+                <span className="sr-only">{t('layout.toggle-menu')}</span>
               </Button>
             </DrawerTrigger>
             <DrawerContent
@@ -147,32 +169,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <div className="flex h-16 shrink-0 items-center px-4">
                   <Logo />
                 </div>
-                {navigation.map((item) => (
-                  <NavLink
-                    key={item.name}
-                    to={item.to}
-                    end
-                    className={({ isActive }) =>
-                      cn(
-                        'text-gray-300 hover:bg-gray-700 hover:text-white',
-                        'group flex w-full flex-1 items-center rounded-md p-2 text-base font-medium',
-                        isActive && 'bg-gray-900 text-white',
-                      )
-                    }
-                  >
-                    <item.icon
-                      className={cn(
-                        'text-gray-400 group-hover:text-gray-300',
-                        'me-4 size-6 shrink-0',
-                      )}
-                      aria-hidden="true"
-                    />
-                    {item.name}
-                  </NavLink>
-                ))}
+                <NavItems navigation={navigation} exactMatch={() => true} />
               </nav>
             </DrawerContent>
           </Drawer>
+          <ExtensionSlot
+            id="app.header.actions"
+            context={{ user: user.data ?? null }}
+          />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -180,8 +184,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 size="icon"
                 className="overflow-hidden rounded-full"
               >
-                <span className="sr-only">Open user menu</span>
-                <User2 className="size-6 rounded-full" />
+                <span className="sr-only">{t('layout.user-menu.open')}</span>
+                <Icon name="UserRound" className="size-6 rounded-full" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -189,14 +193,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 onClick={() => navigate(paths.app.profile.getHref())}
                 className={cn('block px-4 py-2 text-sm text-gray-700')}
               >
-                Your Profile
+                {t('layout.user-menu.profile')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className={cn('block w-full px-4 py-2 text-sm text-gray-700')}
                 onClick={() => logout.mutate({})}
               >
-                Sign Out
+                {t('layout.user-menu.sign-out')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button/button';
 import {
@@ -27,6 +28,7 @@ export const FormDrawer = ({
   triggerButton,
   submitButton,
 }: FormDrawerProps) => {
+  const { t } = useTranslation();
   const { close, open, isOpen } = useDisclosure();
 
   React.useEffect(() => {
@@ -57,7 +59,7 @@ export const FormDrawer = ({
         <DrawerFooter>
           <DrawerClose asChild>
             <Button variant="outline" type="submit">
-              Close
+              {t('ui.close')}
             </Button>
           </DrawerClose>
           {submitButton}

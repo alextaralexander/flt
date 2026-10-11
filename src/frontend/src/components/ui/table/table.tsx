@@ -1,6 +1,7 @@
-import { ArchiveX } from 'lucide-react';
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 
+import { Icon } from '@/components/ui/icon';
 import type { BaseEntity } from '@/types/api';
 import { cn } from '@/utils/cn';
 
@@ -141,11 +142,12 @@ export const Table = <Entry extends BaseEntity>({
   columns,
   pagination,
 }: TableProps<Entry>) => {
+  const { t } = useTranslation();
   if (!data?.length) {
     return (
       <div className="flex h-80 flex-col items-center justify-center bg-white text-gray-500">
-        <ArchiveX className="size-16" />
-        <h4>No Entries Found</h4>
+        <Icon name="ArchiveX" className="size-16" />
+        <h4>{t('ui.table.empty')}</h4>
       </div>
     );
   }

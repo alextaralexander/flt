@@ -19,6 +19,7 @@ import testingLibrary from 'eslint-plugin-testing-library';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+import { ALLOWED_JSX_STRINGS } from './eslint-rules/allowed-strings.js';
 import fltPlugin from './eslint-rules/flt-plugin.js';
 
 const rootDir = import.meta.dirname;
@@ -50,6 +51,41 @@ const SHARED_LAYER = [
   './src/utils',
   './src/config',
 ];
+
+/**
+ * Демо-фичи и демо-роуты bulletproof-react удаляются в этапе 1 Г.7
+ * (ADR-005, 3.2 шаг 11). До удаления они не переводятся на i18n: правила
+ * jsx-no-literals и запрет прямого lucide-react к ним не применяются.
+ * Список удаляется вместе с демо-кодом; новые пути сюда не добавляются.
+ */
+const DEMO_PATHS = [
+  'src/features/auth/**',
+  'src/features/comments/**',
+  'src/features/discussions/**',
+  'src/features/teams/**',
+  'src/features/users/**',
+  'src/app/routes/**',
+];
+
+/** Где строки UI обязаны идти через t() (SYS-07-R9). */
+const UI_SOURCES = [
+  'src/features/**/*.tsx',
+  'src/components/**/*.tsx',
+  'src/app/**/*.tsx',
+];
+/** Атрибуты, текст которых видит или слышит пользователь (SYS-07-R9). */
+const USER_VISIBLE_ATTRIBUTES = [
+  'aria-label',
+  'aria-description',
+  'aria-placeholder',
+  'aria-roledescription',
+  'aria-valuetext',
+  'title',
+  'placeholder',
+  'alt',
+].join('|');
+/** Исключения SYS-07, раздел 6: истории, тесты и тестовая инфраструктура. */
+const UI_EXCEPTIONS = ['**/*.stories.tsx', '**/*.test.tsx', 'src/testing/**'];
 
 export default tseslint.config(
   {
@@ -180,6 +216,66 @@ export default tseslint.config(
       'better-tailwindcss/no-unnecessary-whitespace': 'error',
       'better-tailwindcss/enforce-consistent-class-order': 'error',
       'better-tailwindcss/enforce-canonical-classes': 'error',
+    },
+  },
+  {
+    // SYS-07-R9: строки UI только через t()
+    files: UI_SOURCES,
+    ignores: [...UI_EXCEPTIONS, ...DEMO_PATHS],
+    rules: {
+      // Текст внутри JSX. ignoreProps: true — иначе правило запрещает любые
+      // строковые пропсы (className, variant); видимые пользователю атрибуты
+      // проверяет no-restricted-syntax ниже.
+      'react/jsx-no-literals': [
+        'error',
+        {
+          noStrings: true,
+          ignoreProps: true,
+          allowedStrings: ALLOWED_JSX_STRINGS,
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        ...[
+          `JSXAttribute[name.name=/^(${USER_VISIBLE_ATTRIBUTES})$/] > Literal`,
+          `JSXAttribute[name.name=/^(${USER_VISIBLE_ATTRIBUTES})$/] > JSXExpressionContainer > Literal[value=/[A-Za-z\\u0400-\\u04FF\\u0600-\\u06FF]/]`,
+          `JSXAttribute[name.name=/^(${USER_VISIBLE_ATTRIBUTES})$/] > JSXExpressionContainer > TemplateLiteral`,
+        ].map((selector) => ({
+          selector,
+          message:
+            'SYS-07-R9: aria-label, title, placeholder, alt и подобные атрибуты — только через t()',
+        })),
+      ],
+    },
+  },
+  {
+    // SYS-07-R18: иконки только через <Icon name>; SYS-07-R19: форматирование
+    // только через src/lib/i18n/format.ts
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/components/ui/**', 'src/lib/i18n/**', ...DEMO_PATHS],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'lucide-react',
+              message:
+                'SYS-07-R18: используйте <Icon name> из @/components/ui/icon',
+            },
+          ],
+        },
+      ],
+      'no-restricted-properties': [
+        'error',
+        ...['toLocaleString', 'toLocaleDateString', 'toLocaleTimeString'].map(
+          (property) => ({
+            property,
+            message:
+              'SYS-07-R19: форматирование только через @/lib/i18n/format',
+          }),
+        ),
+      ],
     },
   },
   {

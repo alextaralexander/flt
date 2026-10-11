@@ -1,0 +1,51 @@
+{
+  "app": {
+    "name": "FLT"
+  },
+  "errors": {
+    "app": {
+      "refresh": "تحديث الصفحة",
+      "title": "حدث خطأ ما"
+    }
+  },
+  "language": {
+    "native": {
+      "ar": "العربية",
+      "en": "English",
+      "ru": "Русский"
+    },
+    "switcher": {
+      "label": "لغة الواجهة"
+    }
+  },
+  "layout": {
+    "logo-alt": "الشعار",
+    "nav": {
+      "dashboard": "لوحة التحكم",
+      "discussions": "المناقشات",
+      "users": "المستخدمون"
+    },
+    "toggle-menu": "فتح القائمة",
+    "user-menu": {
+      "open": "فتح قائمة المستخدم",
+      "profile": "الملف الشخصي",
+      "sign-out": "تسجيل الخروج"
+    }
+  },
+  "ui": {
+    "cancel": "إلغاء",
+    "close": "إغلاق",
+    "loading": "جارٍ التحميل",
+    "pagination": {
+      "label": "الصفحات",
+      "more": "صفحات أخرى",
+      "next": "التالي",
+      "next-label": "الانتقال إلى الصفحة التالية",
+      "previous": "السابق",
+      "previous-label": "الانتقال إلى الصفحة السابقة"
+    },
+    "table": {
+      "empty": "لا توجد إدخالات"
+    }
+  }
+}

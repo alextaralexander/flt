@@ -1,9 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 
+import { initTestI18n, resetTestI18n } from '@/testing/i18n';
 import { initializeDb, resetDb } from '@/testing/mocks/db';
 import { server } from '@/testing/mocks/server';
 
 vi.mock('zustand');
+
+initTestI18n();
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterAll(() => server.close());
@@ -22,7 +25,8 @@ beforeEach(() => {
 
   initializeDb();
 });
-afterEach(() => {
+afterEach(async () => {
+  await resetTestI18n();
   server.resetHandlers();
   resetDb();
 });

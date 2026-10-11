@@ -5,6 +5,7 @@ import { Head } from '@/components/seo/head';
 import { Button } from '@/components/ui/button/button';
 import { paths } from '@/config/paths';
 import { useUser } from '@/lib/auth';
+import { ExtensionSlot } from '@/lib/extension-points/extension-slot';
 
 const LandingRoute = () => {
   const navigate = useNavigate();
@@ -22,6 +23,12 @@ const LandingRoute = () => {
     <>
       <Head description="Welcome to bulletproof react" />
       <div className="flex h-screen items-center bg-white">
+        <div className="absolute inset-e-4 top-4 flex gap-2">
+          <ExtensionSlot
+            id="app.header.actions"
+            context={{ user: user.data ?? null }}
+          />
+        </div>
         <div className="mx-auto max-w-7xl px-4 py-12 text-center sm:px-6 lg:px-8 lg:py-16">
           <h2 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
             <span className="block">Bulletproof React</span>

@@ -1,11 +1,8 @@
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
-import {
-  CheckIcon,
-  ChevronRightIcon,
-  DotFilledIcon,
-} from '@radix-ui/react-icons';
+import { CheckIcon, DotFilledIcon } from '@radix-ui/react-icons';
 import * as React from 'react';
 
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/utils/cn';
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
@@ -36,7 +33,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
     {...props}
   >
     {children}
-    <ChevronRightIcon className="ms-auto size-4" />
+    <Icon name="ChevronRight" className="ms-auto size-4" />
   </DropdownMenuPrimitive.SubTrigger>
 ));
 DropdownMenuSubTrigger.displayName =

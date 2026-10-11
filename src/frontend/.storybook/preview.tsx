@@ -1,22 +1,32 @@
 import type { Decorator, Preview } from '@storybook/react-vite';
 import { DirectionProvider } from '@radix-ui/react-direction';
+import i18next from 'i18next';
 import { useEffect } from 'react';
 import { MemoryRouter } from 'react-router';
 
+import { initTestI18n } from '../src/testing/i18n';
+
 import '../src/index.css';
 
+initTestI18n();
+
 type Direction = 'ltr' | 'rtl';
+type Locale = 'ru' | 'en' | 'ar';
 
 /**
- * Декоратор направления (ADR-005, 3.2 шаг 6; SYS-10-R32):
- * выставляет dir на <html>, как applyDocumentDirection в приложении,
- * и оборачивает историю в DirectionProvider Radix.
+ * Декоратор языка и направления (ADR-005, 3.2 шаг 6; SYS-10-R32):
+ * язык интерфейса меняет i18next, `dir` на <html> выставляется по глобалу
+ * direction, как applyDocumentDirection в приложении; истории обёрнуты в
+ * DirectionProvider Radix.
  */
-const withDirection: Decorator = (Story, context) => {
+const withLocaleAndDirection: Decorator = (Story, context) => {
+  const locale = (context.globals.locale ?? 'ru') as Locale;
   const direction = (context.globals.direction ?? 'ltr') as Direction;
   useEffect(() => {
-    document.documentElement.dir = direction;
-  }, [direction]);
+    void i18next.changeLanguage(locale).then(() => {
+      document.documentElement.dir = direction;
+    });
+  }, [locale, direction]);
   return (
     <DirectionProvider dir={direction}>
       <Story />
@@ -32,6 +42,19 @@ const withRouter: Decorator = (Story) => (
 
 const preview: Preview = {
   globalTypes: {
+    locale: {
+      description: 'Язык интерфейса',
+      toolbar: {
+        title: 'Locale',
+        icon: 'globe',
+        items: [
+          { value: 'ru', title: 'Русский' },
+          { value: 'en', title: 'English' },
+          { value: 'ar', title: 'العربية' },
+        ],
+        dynamicTitle: true,
+      },
+    },
     direction: {
       description: 'Направление письма',
       toolbar: {
@@ -45,8 +68,8 @@ const preview: Preview = {
       },
     },
   },
-  initialGlobals: { direction: 'ltr' },
-  decorators: [withRouter, withDirection],
+  initialGlobals: { locale: 'ru', direction: 'ltr' },
+  decorators: [withRouter, withLocaleAndDirection],
 };
 
 export default preview;
