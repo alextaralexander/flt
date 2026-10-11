@@ -14,15 +14,19 @@
 индексов она получает вместе с хранилищем и поиском (этап 1 Г.4).
 """
 
+import argparse
 import asyncio
+import json
 import sys
 import urllib.request
 from collections.abc import Sequence
+from datetime import datetime
 
 import uvicorn
 from alembic import command
 from alembic.config import Config
 
+from app.core.kafka.dlq import DlqReplayLimitError, list_dlq, replay_dlq
 from app.core.kafka.topics_admin import apply_topics
 from app.core.logging import app_logger, logger_settings
 from app.core.modules import load_modules
@@ -77,6 +81,41 @@ def run_migrate(modules: Sequence[str] = MODULES) -> None:
     app_logger.info("Топики Kafka готовы", declared=len(declarations), created=len(created))
 
 
+def run_dlq(args: Sequence[str]) -> int:
+    """`dlq list|replay`: разбор dead letter topic вручную (SYS-04-R28)."""
+    parser = argparse.ArgumentParser(prog="python -m app dlq")
+    commands = parser.add_subparsers(dest="command", required=True)
+    list_parser = commands.add_parser("list", help="Сообщения <topic>.dlq")
+    list_parser.add_argument("--topic", required=True)
+    list_parser.add_argument("--since", type=datetime.fromisoformat, default=None)
+    replay_parser = commands.add_parser("replay", help="Вернуть сообщения <topic>.dlq в <topic>")
+    replay_parser.add_argument("--topic", required=True)
+    replay_parser.add_argument("--event-id", dest="event_ids", action="append", default=None)
+    replay_parser.add_argument("--consumer", default=None)
+    replay_parser.add_argument("--dry-run", action="store_true")
+    replay_parser.add_argument("--force", action="store_true")
+    options = parser.parse_args(list(args))
+    if options.command == "list":
+        for entry in asyncio.run(list_dlq(options.topic, since=options.since)):
+            print(json.dumps(entry, ensure_ascii=False))
+        return 0
+    try:
+        replayed = asyncio.run(
+            replay_dlq(
+                options.topic,
+                event_ids=options.event_ids,
+                consumer=options.consumer,
+                dry_run=options.dry_run,
+                force=options.force,
+            )
+        )
+    except DlqReplayLimitError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(json.dumps({"replayed": replayed, "dry_run": options.dry_run}, ensure_ascii=False))
+    return 0
+
+
 def healthcheck(role: AppRole) -> int:
     """Код возврата проверки `/v1/health` на порту роли; у ролей без HTTP проверять нечего (0)."""
     if role is AppRole.MIGRATE:
@@ -104,8 +143,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     role = settings.role
     if args == ["healthcheck"]:
         return healthcheck(role)
+    if args and args[0] == "dlq":
+        return run_dlq(args[1:])
     if args:
-        print(f"Неизвестные аргументы: {args}. Использование: python -m app [healthcheck]", file=sys.stderr)
+        print(
+            f"Неизвестные аргументы: {args}. Использование: python -m app [healthcheck | dlq list|replay ...]",
+            file=sys.stderr,
+        )
         return 2
 
     logger_settings.setup_logging()
