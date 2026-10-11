@@ -148,10 +148,9 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: src/backend/py-monolyth/uv.lock
-      # Границы модулей: import-linter по .importlinter (ADR-002). Архитектурные pytest-тесты
-      # (`uv run pytest tests/architecture`, негативный test_boundary_violation_breaks_build)
-      # добавляются в этот job в Г.2 вместе с каталогом tests/architecture (SYS-12-R13).
-      - name: import-linter (make arch)
+      # Границы модулей и хранение состояния (ADR-002, SYS-12-R13): `make arch` запускает import-linter
+      # и pytest tests/architecture, включая негативный test_boundary_violation_breaks_build.
+      - name: architecture tests (make arch)
         if: env.CHANGED == 'true'
         working-directory: src/backend/py-monolyth
         run: |
