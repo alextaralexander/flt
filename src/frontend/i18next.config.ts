@@ -32,6 +32,7 @@ export default defineConfig({
     nsSeparator: ':',
     pluralSeparator: '_',
     // Ключи с динамической частью по перечню языков интерфейса
-    preservePatterns: ['language.native.*'],
+    // и коды ошибок конверта ErrorResponseV1 (errors.<module>.<code>, SYS-07-R12)
+    preservePatterns: ['language.native.*', 'errors.*'],
   },
 });

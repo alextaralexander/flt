@@ -4,8 +4,15 @@
   },
   "errors": {
     "app": {
+      "network": "No connection to the server",
       "refresh": "Refresh",
-      "title": "Ooops, something went wrong"
+      "request-failed": "The request failed",
+      "request-id": "Request ID: {{id}}",
+      "request-title": "Error",
+      "title": "Ooops, something went wrong",
+      "too-large": "The file or request is too large",
+      "too-many-requests": "Too many requests, try again later",
+      "unavailable": "The service is temporarily unavailable"
     }
   },
   "language": {

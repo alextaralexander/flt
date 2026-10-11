@@ -4,8 +4,15 @@
   },
   "errors": {
     "app": {
+      "network": "لا يوجد اتصال بالخادم",
       "refresh": "تحديث الصفحة",
-      "title": "حدث خطأ ما"
+      "request-failed": "تعذّر تنفيذ الطلب",
+      "request-id": "رمز الطلب: {{id}}",
+      "request-title": "خطأ",
+      "title": "حدث خطأ ما",
+      "too-large": "الملف أو الطلب كبير جدًا",
+      "too-many-requests": "طلبات كثيرة جدًا، حاول لاحقًا",
+      "unavailable": "الخدمة غير متاحة مؤقتًا"
     }
   },
   "language": {

@@ -6,13 +6,16 @@ import { paths } from '@/config/paths';
 import type { AuthResponse, User } from '@/types/api';
 
 import { api } from './api-client';
+import { applyProfileLanguage } from './i18n/i18n';
 
 // api call definitions for auth (types, schemas, requests):
 // these are not part of features as this is a module shared across features
 
 const getUser = async (): Promise<User> => {
   const response = await api.get('/auth/me');
-
+  const user = response.data as User | null;
+  // Язык из профиля — первый источник SYS-07-R3
+  await applyProfileLanguage(user?.ui_language);
   return response.data;
 };
 

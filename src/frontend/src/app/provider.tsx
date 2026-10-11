@@ -7,6 +7,8 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { MainErrorFallback } from '@/components/errors/main';
 import { Notifications } from '@/components/ui/notifications/notifications';
 import { Spinner } from '@/components/ui/spinner/spinner';
+import { paths } from '@/config/paths';
+import { setSessionExpiredHandler } from '@/lib/api-client';
 import { AuthLoader } from '@/lib/auth';
 import { useDirection } from '@/lib/i18n/use-direction';
 import { queryConfig } from '@/lib/react-query';
@@ -28,6 +30,16 @@ export const AppProvider = ({ children }: AppProviderProps) => {
         defaultOptions: queryConfig,
       }),
   );
+
+  // Повторный 401 после refresh: сброс кэша `me` и экран входа (ADR-006)
+  React.useEffect(() => {
+    setSessionExpiredHandler(() => {
+      queryClient.setQueryData(['authenticated-user'], null);
+      window.location.assign(
+        paths.auth.login.getHref(window.location.pathname),
+      );
+    });
+  }, [queryClient]);
 
   return (
     <React.Suspense

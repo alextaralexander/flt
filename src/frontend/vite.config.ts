@@ -18,9 +18,28 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'jsdom',
-    setupFiles: './src/testing/setup-tests.ts',
     exclude: ['**/node_modules/**', '**/e2e/**'],
+    projects: [
+      {
+        // Приложение: компоненты, хуки, lib, архитектурные тесты
+        extends: true,
+        test: {
+          name: 'app',
+          environment: 'jsdom',
+          include: ['src/**/*.test.{ts,tsx}'],
+          setupFiles: './src/testing/setup-tests.ts',
+        },
+      },
+      {
+        // Репозиторные скрипты фронтенда и локальные правила ESLint
+        extends: true,
+        test: {
+          name: 'tooling',
+          environment: 'node',
+          include: ['scripts/**/*.test.ts', 'eslint-rules/**/*.test.js'],
+        },
+      },
+    ],
     // Детерминированный порядок со случайным перемешиванием (SYS-10)
     sequence: { shuffle: true, seed: 20261010 },
     env: { TZ: 'UTC' },
