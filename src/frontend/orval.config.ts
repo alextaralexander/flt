@@ -35,10 +35,16 @@ export const listOpenApiModules = (specsDir: string = SPECS_DIR): string[] =>
 const relativeToFrontend = (absolute: string) =>
   path.relative(FRONTEND_ROOT, absolute).split(path.sep).join('/');
 
+/** Общие компоненты контрактов модулей подключаются внешними $ref (SYS-03, пример 1). */
+const SHARED_REFS = ['../../_system/openapi-common.yaml'];
+
 const moduleEntries = (module: string): Record<string, Options> => {
-  const input = relativeToFrontend(
-    path.join(SPECS_DIR, module, 'api/openapi.yaml'),
-  );
+  const input = {
+    target: relativeToFrontend(
+      path.join(SPECS_DIR, module, 'api/openapi.yaml'),
+    ),
+    parserOptions: { externalRefs: { allow: SHARED_REFS } },
+  };
   const generated = `src/features/${featureNameOf(module)}/api/generated`;
   return {
     [module]: {
