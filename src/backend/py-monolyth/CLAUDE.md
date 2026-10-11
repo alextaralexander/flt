@@ -63,7 +63,7 @@ app/
     http/                # конверт ErrorResponseV1, обработчики исключений, access-лог
     kafka/               # брокер процесса (create_broker), базовые схемы сообщений
     dao/db_helpers/      # engine по роли, сессии, module_metadata()/make_module_base(), общий env.py Alembic
-    dao/caching/         # Redis-клиент процесса (standalone/Sentinel); ModuleRedis — этап 1 Г.4
+    dao/caching/         # Redis-клиент процесса (standalone/Sentinel), ModuleRedis, locks, rate_limiter
     security/ logging/ metrics/ telemetry.py exceptions.py schemas.py
   modules/
     registry.py          # MODULES — модули в порядке зависимостей SYS-01
@@ -87,7 +87,7 @@ tests/                   # зеркалит app/: tests/core, tests/modules/<mod
 - Внутри модуля: `api | brokers` → `public` → `services` → `dao` → `models`; `schemas`,
   `settings`, `permissions` доступны любому слою. Контроллер не ходит в DAO напрямую.
 - `app.core` и `configs` не импортируют `app.modules` (`core-does-not-import-modules`).
-- Модули не импортируют `redis` и `app.core.dao.caching.redis_conn` (только `ModuleRedis`, Г.4),
+- Модули не импортируют `redis` и `app.core.dao.caching.redis_conn` (только `ModuleRedis`),
   брокер Kafka `app.core.kafka.broker` (публикация — через outbox, Г.4), `aioboto3`, `botocore`,
   `opensearchpy`, `qdrant_client`.
 - У модуля своя схема PostgreSQL `<module>`; внешних ключей и `relationship` между схемами нет,
@@ -162,7 +162,8 @@ Docstring-и — часть контракта функций, классов и
 
 - Структура `tests/` зеркалит `app/`; тесты модулей — `tests/modules/<module>/`.
 - Аутентификация HTTP-тестов — через `dependency_overrides` одной точки `get_current_user`
-  (`tests/conftest.py`). До `TokenVerifier` (этап 1 Г.4) `check_token` отклоняет любой токен.
+  (`tests/conftest.py`). Токены проверяет `TokenVerifier` (EdDSA по `kid`, отзыв в Redis); тестовые
+  токены выпускает `tests/support/tokens.py` на одноразовой паре ключей.
 - Миграции всех модулей реестра накатываются фикстурой `db_migrate` один раз на сессию.
 - Покрытие защищено порогом `fail_under` (pyproject) — не отключай его, добавляй тесты.
 - Шаблон тела теста — **Arrange / Act / Assert** (+ `Clean`, если создавали данные в БД).
