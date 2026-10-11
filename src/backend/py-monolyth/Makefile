@@ -5,6 +5,7 @@
 
 # Запускаем инструменты в окружении uv. Если uv недоступен — переопредели: make RUN= ...
 RUN ?= uv run
+REPO_ROOT := $(abspath $(CURDIR)/../../..)
 COMPOSE_FILE ?= ../../../deploy/docker-compose/docker-compose.yml
 # Инфраструктура для запуска сервиса на хосте (сам сервис в compose — сервис `backend`).
 COMPOSE_INFRA ?= postgres redis kafka
@@ -67,10 +68,10 @@ arch: ## Границы модулей: import-linter по .importlinter (+ test
 
 security: ## Security-анализ: bandit + detect-secrets
 	$(RUN) bandit -c pyproject.toml -r app cli
-	$(RUN) detect-secrets-hook --baseline .secrets.baseline $$(git ls-files)
+	cd $(REPO_ROOT) && uv run --project $(CURDIR) detect-secrets-hook --baseline .secrets.baseline $$(git ls-files src/backend)
 
-secrets-scan: ## Пересобрать .secrets.baseline (после ревью находок)
-	$(RUN) detect-secrets scan --baseline .secrets.baseline
+secrets-scan: ## Пересобрать корневой .secrets.baseline (после ревью находок; общий для репозитория, ADR-011)
+	cd $(REPO_ROOT) && uv run --project $(CURDIR) detect-secrets scan --baseline .secrets.baseline
 
 # --- Тесты ------------------------------------------------------------------
 
