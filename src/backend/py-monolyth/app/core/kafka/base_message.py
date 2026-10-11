@@ -1,8 +1,8 @@
 """Базовые схемы Kafka-сообщений модулей, которые генерирует скаффолдер.
 
-Конверт доменного события ADR-004 (`event_id`, `event_type`, `event_version`, …)
-и `OutboxPublisher` появляются в shared kernel на этапе 1 Г.4; до этого
-сгенерированные схемы сообщений наследуют эти базовые классы.
+Конверт доменного события и команда задания — `app.core.kafka.envelope` (`EventEnvelope`,
+`BaseEvent`, `JobCommand`, SYS-04-R20, R29); `OutboxPublisher` — следующий шаг этапа 1 Г.4.
+До перевода скаффолдера на `BaseEvent` сгенерированные схемы наследуют эти базовые классы.
 """
 
 from datetime import UTC, datetime
