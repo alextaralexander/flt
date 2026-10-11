@@ -35,6 +35,7 @@ from app.core.http.instance_header import InstanceIdMiddleware
 from app.core.http.logging_middleware import register_logging_middleware
 from app.core.kafka.broker import create_broker
 from app.core.kafka.relay import BrokerSink, OutboxRelay, OutboxSink
+from app.core.kafka.scheduler import Scheduler
 from app.core.logging import logger_settings
 from app.core.metrics.metrics_controller import router as service_router
 from app.core.metrics.metrics_middleware import PrometheusMiddleware
@@ -181,8 +182,11 @@ def create_worker_app(
     relay_stop = asyncio.Event()
 
     async def start_relays() -> None:
-        """Relay outbox для каждого модуля с outbox — после подключения брокера."""
+        """Relay outbox для каждого модуля с outbox и планировщик задач — после подключения брокера."""
         relay_stop.clear()
+        if any(module.schedules for module in resolved):
+            scheduler = Scheduler(resolved, ModuleRedis("shared_kernel"), get_session_maker())
+            relay_tasks.append(asyncio.create_task(scheduler.run(relay_stop), name="scheduler"))
         for module in resolved:
             if module.outbox is None:
                 continue
