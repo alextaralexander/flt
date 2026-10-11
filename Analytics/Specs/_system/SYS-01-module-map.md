@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | draft |
-| Версия | 0.2 |
+| Статус | approved |
+| Версия | 1.0 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-11 (PR #3) |
 | Пункт(ы) BRD | все |
 | Модуль | все |
 | Зависимости | ADR-002, ADR-003, ADR-004, ADR-007, ADR-008, ADR-014, ADR-015 |
@@ -452,3 +452,4 @@ TOPICS: tuple[TopicDeclaration, ...] = (MATERIAL_UPLOADED_V1, JOB_EXTRACT_TEXT_V
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
 | 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: таблица 3.1 — `model_preferences` и `harness_settings` у `llm_gateway`, выбор модели убран из `learner_profile`, `course_default_model` у `courses` отделён от `platform_model`; таблица 3.2 — событие `model_preference_changed.v1` и команда `prefill_model_preferences` у `llm_gateway` вместо `learner_profile.model_selected`; R7 проверка и пример 4 — `public/topics.py`, `TopicDeclaration` с `visibility` (SYS-04-R21); раздел 9 — OQ-81 | draft |
+| 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока Б этапа 1 без изменений (PR #3) | approved |
