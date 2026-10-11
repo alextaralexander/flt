@@ -242,6 +242,7 @@ def add_module(
         f"{base}/__init__.py": templates.MODULE_INIT,
         f"{base}/module.py": templates.MODULE_DEFINITION,
         f"{base}/public/__init__.py": templates.MODULE_PUBLIC_INIT,
+        f"{base}/public/topics.py": templates.MODULE_PUBLIC_TOPICS,
         f"{base}/models/__init__.py": templates.MODULE_MODELS_INIT,
         f"{base}/settings.py": templates.MODULE_SETTINGS,
         f"{base}/permissions.py": templates.MODULE_PERMISSIONS,
@@ -358,14 +359,31 @@ def add_subscriber(
         raise typer.Exit(code=1)
 
     const, snake, pascal = to_const(topic), to_snake(topic), to_pascal(topic)
-    tokens = {**_module_tokens(module), "PASCAL": pascal, "SNAKE": snake, "CONST": const, "VALUE": value}
+    owner = value.split(".")[1]
+    kind = "job" if ".jobs." in value else "event"
+    if owner != module:
+        _require_module(owner)
+        if kind == "job":
+            typer.secho(
+                f"  ! команды заданий {value} принимает только модуль {owner} (SYS-04-R21)", fg=typer.colors.RED
+            )
+            raise typer.Exit(code=1)
+    tokens = {
+        **_module_tokens(module),
+        "PASCAL": pascal,
+        "SNAKE": snake,
+        "CONST": const,
+        "VALUE": value,
+        "OWNER": owner,
+        "KIND": kind,
+        "VISIBILITY": "internal" if owner == module else "public",
+    }
     base = f"app/modules/{module}"
     typer.secho(f'\nKafka subscriber: {module}.{const} = "{value}"\n', bold=True)
 
     files = {
         f"{base}/brokers/__init__.py": templates.BROKERS_INIT,
         f"{base}/brokers/router.py": templates.BROKERS_ROUTER,
-        f"{base}/brokers/topics.py": templates.BROKERS_TOPICS,
         f"{base}/brokers/subscribers.py": templates.BROKERS_SUBSCRIBERS,
         f"{base}/brokers/messages/__init__.py": templates.BROKERS_MESSAGES_INIT,
         f"{base}/brokers/messages/{snake}_message.py": templates.SUBSCRIBER_SCHEMA,
@@ -375,10 +393,13 @@ def add_subscriber(
     for rel_path, template in files.items():
         _create_file(rel_path, templates.render(template, **tokens), dry_run)
 
+    # Декларация топика — в public/topics.py модуля-владельца (SYS-04-R21).
+    owner_topics = f"app/modules/{owner}/public/topics.py"
+    _create_file(owner_topics, templates.render(templates.MODULE_PUBLIC_TOPICS, **_module_tokens(owner)), dry_run)
     _append_file(
-        f"{base}/brokers/topics.py",
-        templates.render(templates.SUBSCRIBER_TOPIC_MEMBER, **tokens),
-        marker=f"{const} =",
+        owner_topics,
+        templates.render(templates.TOPIC_DECLARATION, **tokens),
+        marker=f"{const} = TopicDeclaration",
         dry_run=dry_run,
     )
     _insert_after(
@@ -409,7 +430,7 @@ def add_subscriber(
         dry_run=dry_run,
     )
 
-    _format([*files, f"{base}/module.py"], dry_run)
+    _format([*files, f"{base}/module.py", owner_topics], dry_run)
 
     typer.secho("\nСледующие шаги:", bold=True)
     typer.echo(f"  1. Реализуй обработку в {base}/brokers/services/{snake}_service.py (данные — через services/)")

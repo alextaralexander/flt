@@ -39,8 +39,9 @@ MODULE_DEFINITION = '''"""Описание модуля `__MODULE__` для shar
 
 from app.core.modules import ModuleDefinition
 from app.modules.__MODULE__.api.router import router
-from app.modules.__MODULE__.models import Base
+from app.modules.__MODULE__.models import Base, outbox
 from app.modules.__MODULE__.permissions import module_permissions
+from app.modules.__MODULE__.public.topics import TOPICS
 from app.modules.__MODULE__.settings import __MODULE_PASCAL__Settings
 
 
@@ -50,6 +51,8 @@ module = ModuleDefinition(
     router=router,
     settings=__MODULE_PASCAL__Settings(),
     permissions=module_permissions(),
+    topics=TOPICS,
+    outbox=outbox,
 )
 '''
 
@@ -68,12 +71,23 @@ MODULE_MODELS_INIT = '''"""Модели модуля `__MODULE__`: все таб
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.dao.db_helpers.base import module_metadata
+from app.core.kafka.inbox import processed_events_table
+from app.core.kafka.jobs import jobs_table
+from app.core.kafka.outbox import outbox_table
+from app.core.kafka.scheduler import scheduled_runs_table
 
 
 class Base(DeclarativeBase):
     """Базовый класс моделей модуля `__MODULE__` (схема `__MODULE__`)."""
 
     metadata = module_metadata("__MODULE__")
+
+
+# Служебные таблицы доставки и заданий модуля (SYS-04-R24, R26, R29, R32).
+outbox = outbox_table(Base.metadata)
+processed_events = processed_events_table(Base.metadata)
+jobs = jobs_table(Base.metadata)
+scheduled_runs = scheduled_runs_table(Base.metadata)
 
 
 # Модели модуля импортируются ниже, чтобы попасть в `Base.metadata` (Alembic, тесты);
@@ -649,14 +663,23 @@ kafka_router = KafkaRouter()
 '''
 
 
-BROKERS_TOPICS = '''"""Топики Kafka, которые слушает модуль `__MODULE__` (формат имён — ADR-004, SYS-04)."""
+MODULE_PUBLIC_TOPICS = '''"""Топики Kafka модуля `__MODULE__` (SYS-04-R19, R21).
 
-from enum import StrEnum
+По декларациям роль `migrate` создаёт топики и их DLQ; консьюмеры других модулей импортируют
+отсюда декларации публичных топиков. Строки добавляет `make scaffold-subscriber`.
+"""
+
+from app.core.kafka.declarations import TopicDeclaration
 
 
-class __MODULE_PASCAL__Topics(StrEnum):
-    """Входящие топики модуля `__MODULE__`."""
+TOPICS: tuple[TopicDeclaration, ...] = ()
 '''
+
+
+TOPIC_DECLARATION = """
+__CONST__ = TopicDeclaration(name="__VALUE__", kind="__KIND__", visibility="__VISIBILITY__")
+TOPICS = (*TOPICS, __CONST__)
+"""
 
 
 BROKERS_MESSAGES_INIT = '''"""Схемы Kafka-сообщений модуля `__MODULE__`."""
@@ -669,103 +692,74 @@ BROKERS_SERVICES_INIT = '''"""Обработчики сообщений Kafka м
 
 BROKERS_SUBSCRIBERS = '''"""Подписчики Kafka модуля `__MODULE__`: тонкие хендлеры, логика — в сервисах (ADR-002).
 
-Сервисы приходят через `Depends()` FastStream — их можно подменить в тестах.
+Каждый подписчик обёрнут `@idempotent_consumer`: inbox `processed_events`, ретраи и DLQ
+(SYS-04-R26, R27); обработчик получает сессию транзакции и тело сообщения.
 """
 
-from typing import Annotated
+from typing import Any
 
-from faststream import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.logging import bind_broker_log_context
+from app.core.kafka.inbox import idempotent_consumer
 from app.modules.__MODULE__.brokers.router import kafka_router
-from app.modules.__MODULE__.brokers.topics import __MODULE_PASCAL__Topics
+from app.modules.__MODULE__.models import processed_events
 '''
 
 
-SUBSCRIBER_SCHEMA = '''"""Схема Kafka-сообщения топика `__VALUE__`."""
+SUBSCRIBER_SCHEMA = '''"""Схема нагрузки (`payload` конверта) сообщения топика `__VALUE__` (SYS-04-R20)."""
 
-from typing import Literal
-
-from pydantic import BaseModel, Field
-
-from app.core.kafka.base_message import BaseMessageHeaderSchema, BaseMessageSchema
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class __PASCAL__HeaderSchema(BaseMessageHeaderSchema):
-    """Header для `__PASCAL__Message`."""
+class __PASCAL__Payload(BaseModel):
+    """Нагрузка сообщения `__VALUE__`; неизвестные поля игнорируются (SYS-04-R30)."""
 
-    message_type: Literal["__PASCAL__.message_type"] = Field(
-        description="Название типа сообщения.",
-        default="__PASCAL__.message_type",
-    )
+    model_config = ConfigDict(extra="ignore")
 
-
-class PayloadIn__PASCAL__Message(BaseModel):
-    """Payload для `__PASCAL__Message`."""
-
-    value: str = Field(
-        description="Описание полезной нагрузки.",
-    )
-
-
-class __PASCAL__Message(BaseMessageSchema):
-    """Сообщение из топика `__VALUE__`."""
-
-    header: __PASCAL__HeaderSchema = Field(
-        description="Служебный заголовок сообщения.",
-        default_factory=lambda: __PASCAL__HeaderSchema(),
-    )
-    payload: PayloadIn__PASCAL__Message = Field(
-        description="Полезная нагрузка сообщения.",
-    )
+    value: str = Field(description="Описание полезной нагрузки.")
 '''
 
 
 SUBSCRIBER_SERVICE = '''"""Сервис обработки сообщения из топика `__VALUE__` модуля `__MODULE__` (слой brokers)."""
 
-from app.modules.__MODULE__.brokers.messages.__SNAKE___message import __PASCAL__Message
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.__MODULE__.brokers.messages.__SNAKE___message import __PASCAL__Payload
 
 
 class __PASCAL__MessageService:
     """Бизнес-логика обработки сообщения `__CONST__`."""
 
-    async def process(self, message: __PASCAL__Message) -> None:
-        """Обработать сообщение из топика `__VALUE__`.
+    async def process(self, session: AsyncSession, payload: __PASCAL__Payload) -> None:
+        """Обработать сообщение из топика `__VALUE__` в транзакции inbox (`session`).
 
-        TODO: реализовать бизнес-логику (идемпотентность через inbox — этап 1 Г.4).
+        TODO: реализовать бизнес-логику; собственные события — через `OutboxPublisher` в той же сессии.
         """
 '''
 
 
 # Импорты хендлера вставляются в верхний блок импортов subscribers.py (ruff их сортирует).
-SUBSCRIBER_HANDLER_IMPORTS = """from app.modules.__MODULE__.brokers.messages.__SNAKE___message import __PASCAL__Message
+SUBSCRIBER_HANDLER_IMPORTS = """from app.modules.__MODULE__.brokers.messages.__SNAKE___message import __PASCAL__Payload
 from app.modules.__MODULE__.brokers.services.__SNAKE___service import __PASCAL__MessageService
+from app.modules.__OWNER__.public.topics import __CONST__
 """
 
 
 SUBSCRIBER_HANDLER = '''
 
 @kafka_router.subscriber(
-    __MODULE_PASCAL__Topics.__CONST__,
+    __CONST__.name,
     group_id="flt.__MODULE__.__SNAKE__",
     auto_offset_reset="earliest",
     title="__CONST__",
     description="Обработчик топика __VALUE__.",
 )
-async def handle___SNAKE__(
-    message: __PASCAL__Message,
-    service: Annotated[__PASCAL__MessageService, Depends(__PASCAL__MessageService)],
-) -> None:
-    """Обработчик сообщений топика `__VALUE__`."""
-    bind_broker_log_context(message)
-
-    await service.process(message)
+@idempotent_consumer("__MODULE__.__SNAKE__", processed_events)
+async def handle___SNAKE__(session: AsyncSession, body: dict[str, Any]) -> None:
+    """Обработчик сообщений топика `__VALUE__`: разбор нагрузки и вызов сервиса."""
+    payload = __PASCAL__Payload.model_validate(body.get("payload", {}))
+    await __PASCAL__MessageService().process(session, payload)
 '''
-
-
-SUBSCRIBER_TOPIC_MEMBER = """
-    __CONST__ = "__VALUE__"
-"""
 
 
 # Импорт subscribers регистрирует хендлеры на kafka_router модуля.

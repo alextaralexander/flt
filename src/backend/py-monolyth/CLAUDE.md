@@ -123,8 +123,12 @@ tests/                   # зеркалит app/: tests/core, tests/modules/<mod
    права, подключение роутера и тест сервиса; затем поля модели,
    `make makemigration module=<module> name="add_order"`, проверка ревизии, `make migrate`.
 3. `make scaffold-subscriber module=<module> topic=ORDER_PLACED value="flt.<producer>.order_placed.v1"` —
-   схема в `brokers/messages/`, обработчик в `brokers/services/`, член enum в `brokers/topics.py`,
-   хендлер в `brokers/subscribers.py` с `group_id="flt.<module>.<handler>"`; формат топика — SYS-04.
+   схема payload в `brokers/messages/`, обработчик в `brokers/services/`, декларация
+   `TopicDeclaration` в `public/topics.py` модуля-владельца топика (`<producer>`; чужой топик —
+   только событие, `visibility="public"`), хендлер в `brokers/subscribers.py` с
+   `group_id="flt.<module>.<handler>"` и `@idempotent_consumer` (inbox `processed_events`);
+   формат топика — SYS-04. `scaffold-module` сразу создаёт таблицы `outbox`, `processed_events`,
+   `jobs`, `scheduled_runs` в `models/__init__.py` и подключает `topics=TOPICS, outbox=outbox`.
 
 ## Жизненный цикл ресурсов
 
