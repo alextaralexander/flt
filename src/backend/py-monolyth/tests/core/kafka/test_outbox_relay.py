@@ -7,7 +7,7 @@ from typing import Any, ClassVar
 from uuid import UUID
 
 import pytest
-from faststream.kafka import KafkaMessage, TestKafkaBroker
+from faststream.kafka import KafkaMessage, KafkaRouter, TestKafkaBroker
 from pydantic import BaseModel
 from redis.asyncio import Redis
 from sqlalchemy import Table, func, select
@@ -19,6 +19,8 @@ from app.core.kafka.broker import PRODUCER_SETTINGS, create_broker
 from app.core.kafka.envelope import BaseEvent, JobCommand
 from app.core.kafka.outbox import OutboxPublisher
 from app.core.kafka.relay import BrokerSink, OutboxRelay, OutboxSink
+from app.core.modules import ModuleDefinition, ModuleLoadError, ModuleRegistry
+from app.main import create_worker_app
 from tests.core.kafka.conftest import OUTBOX_SCHEMA
 from tests.support.redis_instances import redis_instances  # noqa: F401
 
@@ -239,3 +241,38 @@ async def test_broker_sink_publishes_to_kafka_topic() -> None:
 def test_broker_producer_is_idempotent() -> None:
     """Продюсер брокера настроен на `acks=all` и идемпотентность (SYS-04-R24)."""
     assert PRODUCER_SETTINGS == {"acks": "all", "enable_idempotence": True}
+
+
+@pytest.mark.req("SYS-04-R24")
+async def test_worker_lifespan_runs_relay_for_module_outbox(
+    outbox: Table, session_maker: async_sessionmaker[AsyncSession], redis_clean: None
+) -> None:
+    """Роль `worker` запускает relay для модулей с `ModuleDefinition.outbox` и останавливает его при выключении."""
+    # - Arrange -
+    received: list[dict[str, Any]] = []
+    router = KafkaRouter()
+
+    @router.subscriber(EVENT_TOPIC)
+    async def collect(body: dict[str, Any]) -> None:
+        received.append(body)
+
+    module = ModuleDefinition(name=OUTBOX_SCHEMA, metadata=outbox.metadata, kafka_router=router, outbox=outbox)
+    worker = create_worker_app([module], manage_resources=False)
+    await _publish(session_maker, outbox, new_id(), 1)
+
+    # - Act -
+    async with TestKafkaBroker(worker.brokers[0]), worker.start_lifespan_context():
+        for _ in range(100):
+            if received:
+                break
+            await asyncio.sleep(0.05)
+
+    # - Assert -
+    assert [body["payload"]["n"] for body in received] == [1]
+    assert await _unpublished(session_maker, outbox) == 0
+
+
+def test_module_outbox_must_live_in_module_schema(outbox: Table) -> None:
+    """Таблица outbox модуля лежит в схеме модуля."""
+    with pytest.raises(ModuleLoadError, match="outbox"):
+        ModuleRegistry.build([ModuleDefinition(name="other", metadata=outbox.metadata, outbox=outbox)])

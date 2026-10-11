@@ -17,7 +17,7 @@ from typing import Any, overload
 from fastapi import APIRouter
 from faststream.kafka import KafkaRouter
 from pydantic_settings import BaseSettings
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, Table
 
 from app.core.captcha import CaptchaProvider, captcha_provider_from_settings
 from app.core.container import ServiceBinding, container
@@ -56,6 +56,8 @@ class ModuleDefinition:
         topics: Декларации топиков модуля из `public/topics.py` (SYS-04-R21); по ним роль `migrate`
             создаёт топики и DLQ.
         schedules: Периодические задачи модуля из `schedules.py` (SYS-04-R32).
+        outbox: Таблица outbox модуля (`outbox_table(metadata)`); для неё роль `worker` запускает
+            relay (SYS-04-R24).
     """
 
     name: str
@@ -72,6 +74,7 @@ class ModuleDefinition:
     provides: tuple[ServiceBinding, ...] = ()
     topics: tuple[TopicDeclaration, ...] = ()
     schedules: tuple[ScheduleDeclaration, ...] = ()
+    outbox: Table | None = None
 
 
 class ModuleLoadError(RuntimeError):
@@ -183,6 +186,8 @@ class ModuleRegistry(Sequence[ModuleDefinition]):
             _check_extension_points(module)
             _check_provides(module)
             _check_schedules(module)
+            if module.outbox is not None and module.outbox.schema != module.name:
+                raise ModuleLoadError(f"Модуль {module.name}: таблица outbox должна лежать в схеме модуля.")
             provider = module.role_permissions_provider
             if provider is not None:
                 if not isinstance(provider, RolePermissionsProvider):
