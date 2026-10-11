@@ -374,7 +374,9 @@ jobs:
       - name: compose logs
         if: failure() && env.RUN_STAND == 'true'
         working-directory: src/backend/py-monolyth
-        run: mkdir -p reports && make stand-logs > reports/compose-logs.txt 2>&1 || true
+        run: |
+          mkdir -p reports
+          make stand-logs > reports/compose-logs.txt 2>&1 || true
       - if: always() && env.RUN_STAND == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
