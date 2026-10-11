@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | review |
-| Версия | 0.1 |
+| Статус | approved |
+| Версия | 1.0 |
 | Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-11 (PR #4) |
 | Пункт(ы) BRD | VIS-04, VIS-05, ADM-01, ADM-02, ADM-05 (санкции), STU-06 (язык интерфейса), STU-35.1 (фото профиля) |
 | Модуль | identity |
 | Зависимости | shared kernel; `audit` (с этапа 3, команда записи) |
@@ -64,7 +64,7 @@
 | `UserContact` | `user_id`, `email`, `email_verified`, `ui_language`, `timezone`, `status` | `notifications` |
 | `ConsentKind` | перечисление `personal_data`, `age_18plus`, `foreign_llm_transfer`, `voice_recording`, `lesson_recording` (SYS-02-R33) | `llm_gateway`, `speech`, `classroom` |
 | `RoleCode` | перечисление `learner`, `teacher`, `platform_admin` (SYS-06-R1) | все модули с правами |
-| `UserStatus` | перечисление `active`, `suspended`, `deleted` (SYS-06-R12; OQ-83) | модули из 3.1 |
+| `UserStatus` | перечисление `active`, `suspended`, `deleted` (SYS-06-R12, OQ-83) | модули из 3.1 |
 | `IdentityErrorCode` | коды ошибок `identity.*` (раздел 7.1) | frontend через контракт, тесты |
 
 ### 3.3. События
@@ -175,7 +175,7 @@
 
 - Префиксы: `/api/v1/auth` (единственное исключение из правила префикса, SYS-03-R2, OQ-12) и `/api/v1/identity` (этап 3).
 - Контракт: `api/openapi.yaml` (создаётся на шаге 4 конвейера для этапа 1 Г.5).
-- Коды ошибок: `identity.invalid_credentials` (401), `identity.refresh_reused` (401), `identity.csrf_invalid` (403), `identity.user_suspended` (403), `identity.login_rate_limited` (429), `identity.account_exists_use_password` (409), `identity.external_account_taken` (409), `identity.email_taken` (409) — в конверте `ErrorResponseV1` (SYS-03-R7); имя `identity.user_suspended` вместо `identity.user_blocked` — OQ-83.
+- Коды ошибок: `identity.invalid_credentials` (401), `identity.refresh_reused` (401), `identity.csrf_invalid` (403), `identity.user_suspended` (403), `identity.login_rate_limited` (429), `identity.account_exists_use_password` (409), `identity.external_account_taken` (409), `identity.email_taken` (409) — в конверте `ErrorResponseV1` (SYS-03-R7); термин `identity.user_suspended` — OQ-83.
 
 | Роутер | Ресурсы | Описан в ТЗ |
 |---|---|---|
@@ -304,7 +304,7 @@
 
 | Вопрос | Суть | Блокирует G1 | Статус |
 |---|---|---|---|
-| [OQ-83](../../open-questions.md) | статус и событие отключения аккаунта: `suspended`/`user_suspended` (SYS-01, SYS-06, глоссарий: «блокировка» без уточнения запрещена) против `blocked`/`user_blocked` (ADR-006, SYS-03, SYS-04); предлагается глоссарный вариант и `changed`-версии SYS-03 и SYS-04 | да | open |
+| [OQ-83](../../open-questions.md) | статус и событие отключения аккаунта | нет | resolved: `suspended`, `user_suspended`; SYS-03 и SYS-04 — 1.1 |
 | [OQ-78](../../open-questions.md) | пункт BRD для удаления аккаунта и выгрузки данных | нет | open |
 | [OQ-12](../../open-questions.md) | OAuth за флагами конфигурации, mock OIDC в тестах | нет | resolved |
 | [OQ-14](../../open-questions.md) | 18+ — самодекларация, факт и время подтверждения | нет | resolved |
@@ -316,3 +316,4 @@
 |---|---|---|---|---|
 | 0.1 | 2026-10-11 | Claude | Черновик | draft |
 | 0.1 | 2026-10-11 | Claude | Передан на гейт G1 (PR блока В) | review |
+| 1.0 | 2026-10-11 | пользователь | Утверждена на гейте G1 блока В (PR #4) | approved |
