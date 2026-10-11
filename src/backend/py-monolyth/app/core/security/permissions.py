@@ -1,19 +1,8 @@
-"""Permissions сервиса.
+"""Права служебных эндпоинтов shared kernel.
 
-Значения — мнемокоды, которые должны приходить в JWT пользователя: напрямую
-в claim `PERMISSIONS` или через роли (claim `ROLES` + маппинг `JWT_ROLE_PERMISSIONS`). Скаффолдер
-(`make scaffold-entity`) добавляет сюда класс для каждой новой сущности.
+Права доменных модулей объявляются в `app/modules/<module>/permissions.py`
+(формат `<module>:<resource>:<action>`, SYS-06); скаффолдер добавляет их туда.
 """
-
-
-class MyEntityPermissions:
-    """Права на операции с сущностью-примером `MyEntity`."""
-
-    GET_MODEL = "GET_MY_ENTITY"
-    GET_LIST = "GET_MY_ENTITY_LIST"
-    CREATE_MODEL = "CREATE_MY_ENTITY"
-    UPDATE_MODEL = "UPDATE_MY_ENTITY"
-    DELETE_MODEL = "DELETE_MY_ENTITY"
 
 
 class MetricsPermissions:

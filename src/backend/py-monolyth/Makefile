@@ -13,8 +13,8 @@ PY_MAIN_LIB ?= ../py-main-lib
 
 .DEFAULT_GOAL := help
 .PHONY: help install dev run test test-cov test-docker format format-check lint lint-fix typecheck \
-        security secrets-scan check migrate makemigration asyncapi \
-        scaffold-entity scaffold-subscriber lock pre-commit \
+        security secrets-scan check migrate makemigration migrate-downgrade asyncapi \
+        scaffold-module scaffold-entity scaffold-subscriber list-modules lock pre-commit \
         compose-up compose-down docker-build clean
 
 help: ## Показать список доступных команд
@@ -81,8 +81,6 @@ test-docker: ## Тесты в одноразовом Postgres (docker run), бе
 		-e POSTGRES_USER=ms_py_test -e POSTGRES_PASSWORD=ms_py_test -e POSTGRES_DB=flt \
 		-p $(TEST_PG_PORT):5432 postgres:16-alpine >/dev/null
 	@until docker exec $(TEST_PG_CONTAINER) pg_isready -U ms_py_test -d flt >/dev/null 2>&1; do sleep 0.5; done
-	@docker exec $(TEST_PG_CONTAINER) psql -U ms_py_test -d flt \
-		-c 'CREATE SCHEMA IF NOT EXISTS "ms_py_test"' >/dev/null
 	@PG_PORT=$(TEST_PG_PORT) $(RUN) pytest; STATUS=$$?; \
 		docker stop $(TEST_PG_CONTAINER) >/dev/null; \
 		exit $$STATUS
@@ -95,25 +93,43 @@ check: format lint typecheck security test ## Полная проверка пе
 pre-commit: ## Прогнать pre-commit на всех файлах
 	$(RUN) pre-commit run --all-files
 
-# --- База данных ------------------------------------------------------------
+# --- База данных (Alembic: секция и схема на модуль, ADR-002) -------------
 
-migrate: ## Применить миграции Alembic (upgrade head)
-	$(RUN) alembic upgrade head
+migrate: ## Применить миграции всех модулей реестра (alembic -n <module> upgrade head)
+	@for m in $$($(RUN) python -m cli list-modules); do \
+		echo "==> alembic -n $$m upgrade head"; \
+		$(RUN) alembic -n $$m upgrade head || exit 1; \
+	done
 
-makemigration: ## Создать ревизию: make makemigration name="add_x"
-	@test -n "$(name)" || (echo "Укажи name=...: make makemigration name=\"add_x\"" && exit 1)
-	$(RUN) alembic revision --autogenerate -m "$(name)"
+makemigration: ## Создать ревизию модуля: make makemigration module=identity name="add_user"
+	@test -n "$(module)" || (echo "Укажи module=... и name=...: make makemigration module=identity name=\"add_user\"" && exit 1)
+	@test -n "$(name)" || (echo "Укажи name=...: make makemigration module=$(module) name=\"add_x\"" && exit 1)
+	$(RUN) alembic -n $(module) revision --autogenerate -m "$(name)"
 
-# --- Скаффолдинг (G10) ------------------------------------------------------
+migrate-downgrade: ## Откатить миграции модуля: make migrate-downgrade module=identity rev=base
+	@test -n "$(module)" || (echo "Укажи module=... и rev=...: make migrate-downgrade module=identity rev=base" && exit 1)
+	@test -n "$(rev)" || (echo "Укажи rev=... (ревизия или base): make migrate-downgrade module=$(module) rev=base" && exit 1)
+	$(RUN) alembic -n $(module) downgrade $(rev)
 
-scaffold-entity: ## Создать REST-сущность: make scaffold-entity name=Order
-	@test -n "$(name)" || (echo "Укажи name=...: make scaffold-entity name=Order" && exit 1)
-	$(RUN) python -m cli add-entity $(name)
+# --- Скаффолдинг (ADR-002, раздел 3.7) --------------------------------------
 
-scaffold-subscriber: ## Создать Kafka-сабскрайбер: make scaffold-subscriber topic=ORDER_CREATED value="svc.order.created.01"
-	@test -n "$(topic)" || (echo "Укажи topic=... и value=...: make scaffold-subscriber topic=ORDER_CREATED value=\"svc.order.created.01\"" && exit 1)
-	@test -n "$(value)" || (echo "Укажи value=...: make scaffold-subscriber topic=ORDER_CREATED value=\"svc.order.created.01\"" && exit 1)
-	$(RUN) python -m cli add-subscriber $(topic) "$(value)"
+scaffold-module: ## Создать доменный модуль: make scaffold-module name=identity
+	@test -n "$(name)" || (echo "Укажи name=...: make scaffold-module name=identity" && exit 1)
+	$(RUN) python -m cli add-module $(name)
+
+scaffold-entity: ## Создать REST-сущность модуля: make scaffold-entity module=identity name=User
+	@test -n "$(module)" || (echo "Укажи module=... и name=...: make scaffold-entity module=identity name=User" && exit 1)
+	@test -n "$(name)" || (echo "Укажи name=...: make scaffold-entity module=$(module) name=User" && exit 1)
+	$(RUN) python -m cli add-entity $(name) --module $(module)
+
+scaffold-subscriber: ## Создать Kafka-консьюмер: make scaffold-subscriber module=m topic=USER_DELETED value="flt.identity.user_deleted.v1"
+	@test -n "$(module)" || (echo "Укажи module=..., topic=... и value=...: make scaffold-subscriber module=m topic=USER_DELETED value=\"flt.identity.user_deleted.v1\"" && exit 1)
+	@test -n "$(topic)" || (echo "Укажи topic=...: make scaffold-subscriber module=$(module) topic=USER_DELETED value=\"flt.identity.user_deleted.v1\"" && exit 1)
+	@test -n "$(value)" || (echo "Укажи value=...: make scaffold-subscriber module=$(module) topic=$(topic) value=\"flt.<module>.<event>.v1\"" && exit 1)
+	$(RUN) python -m cli add-subscriber $(topic) "$(value)" --module $(module)
+
+list-modules: ## Показать модули реестра (app/modules/registry.py)
+	@$(RUN) python -m cli list-modules
 
 # --- AsyncAPI / инфраструктура ---------------------------------------------
 

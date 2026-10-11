@@ -87,9 +87,6 @@ class Settings(BaseSettings):
     PG_DATABASE: str = Field(
         description="Имя базы данных Postgres.",
     )
-    PG_SCHEMA: str = Field(
-        description="Схема Postgres, используемая сервисом.",
-    )
     PG_DRIVER: str = Field(
         description="Драйвер подключения к Postgres (например, asyncpg).",
     )

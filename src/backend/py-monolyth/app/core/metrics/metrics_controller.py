@@ -22,7 +22,7 @@ from app.core.security.schemas import UserSecuritySchema
 from app.core.security.security import auth_user
 
 
-router = APIRouter(tags=["metrics"])
+router = APIRouter(prefix="/v1", tags=["service"])
 
 MetricsServiceDep = Annotated[MetricsService, Depends()]
 

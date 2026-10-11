@@ -1,8 +1,10 @@
 """Общий Redis-клиент приложения.
 
-Клиент создаётся лениво и переиспользуется всеми потребителями
-(кэш-сервисы): у redis-py собственный пул соединений, поэтому один клиент
-на процесс — норма. Закрывает его `lifespan` через `close_redis_client()`.
+Клиент создаётся лениво и переиспользуется всеми потребителями: у redis-py
+собственный пул соединений, поэтому один клиент на процесс — норма. Закрывает
+его `lifespan` через `close_redis_client()`. Модули к клиенту напрямую не
+обращаются: обёртка `ModuleRedis` с префиксом модуля и обязательным TTL —
+этап 1 Г.4 (ADR-003).
 
 Клиент привязан к event loop-у: соединения нельзя переносить между loop-ами
 (актуально для тестов, где каждый сценарий может получить свой loop).
@@ -12,7 +14,6 @@ import asyncio
 
 import redis
 
-from app.core.dao.caching.redis_dao import RedisDAO
 from app.core.logging.context import app_logger
 from configs.redis_config import redis_settings
 
@@ -51,8 +52,3 @@ async def close_redis_client() -> None:
         await _redis_client.aclose()
     _redis_client = None
     _redis_client_loop = None
-
-
-async def get_redis_dao() -> RedisDAO:
-    """DAO поверх общего клиента Redis."""
-    return RedisDAO(await get_redis_client())

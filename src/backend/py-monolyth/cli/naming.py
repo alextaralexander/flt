@@ -1,6 +1,14 @@
-"""Утилиты приведения имён к нужным регистрам."""
+"""Утилиты приведения имён к нужным регистрам и проверки имён модулей и топиков."""
 
 import re
+
+
+# Имя модуля: snake_case, начинается с буквы (оно же имя пакета и схемы PostgreSQL, ADR-002).
+MODULE_NAME_RE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
+# Имена, которые нельзя использовать как модуль: служебные файлы пакета app.modules и схема public.
+RESERVED_MODULE_NAMES = frozenset({"registry", "public", "core", "modules"})
+# Топики Kafka (ADR-004, SYS-04): события flt.<module>.<event>.v<N>, задания flt.<module>.jobs.<job>.v<N>.
+TOPIC_RE = re.compile(r"^flt\.[a-z][a-z0-9_]*\.(jobs\.)?[a-z][a-z0-9_]*\.v[1-9][0-9]*$")
 
 
 def to_snake(name: str) -> str:
@@ -28,3 +36,18 @@ def to_pascal(name: str) -> str:
 def to_const(name: str) -> str:
     """Привести имя к CONSTANT_CASE (для enum-членов)."""
     return to_snake(name).upper()
+
+
+def to_kebab(name: str) -> str:
+    """Привести имя к kebab-case (сегменты REST-путей, SYS-03): `llm_gateway` → `llm-gateway`."""
+    return to_snake(name).replace("_", "-")
+
+
+def is_valid_module_name(name: str) -> bool:
+    """Имя модуля допустимо: snake_case и не зарезервировано."""
+    return bool(MODULE_NAME_RE.match(name)) and name not in RESERVED_MODULE_NAMES
+
+
+def is_valid_topic(value: str) -> bool:
+    """Имя топика соответствует формату ADR-004 / SYS-04."""
+    return bool(TOPIC_RE.match(value))

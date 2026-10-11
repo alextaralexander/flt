@@ -1,17 +1,20 @@
-"""Typer-скаффолдер: генерация REST-сущностей и Kafka-сабскрайберов по образцу проекта.
+"""Typer-скаффолдер модулей монолита (ADR-002, раздел 3.7).
 
 Примеры::
 
-    python -m cli add-entity Order
-    python -m cli add-subscriber ORDER_CREATED "svc.order.created.01"
-    python -m cli add-entity Order --dry-run
-    python -m cli issue-token 00000000-0000-0000-0000-000000000002 --role ADMIN
+    python -m cli add-module identity
+    python -m cli add-entity User --module identity
+    python -m cli add-subscriber USER_DELETED "flt.identity.user_deleted.v1" --module notifications
+    python -m cli list-modules
+    python -m cli add-entity Order --module identity --dry-run
 
 Скаффолдер не перезаписывает существующие файлы и идемпотентен по вставкам
-(повторный запуск не дублирует импорты/строки роутера/enum-члены).
+(повторный запуск не дублирует импорты, строки роутера, секции и члены enum).
+Сгенерированный код обязан проходить `make check` без правок.
 """
 
 # Вызываем только ruff с фиксированными аргументами, без shell.
+import ast
 import subprocess  # nosec B404
 import sys
 from pathlib import Path
@@ -20,14 +23,24 @@ from typing import Annotated
 import typer
 
 from cli import templates
-from cli.naming import to_const, to_pascal, to_snake
+from cli.naming import (
+    is_valid_module_name,
+    is_valid_topic,
+    to_const,
+    to_kebab,
+    to_pascal,
+    to_snake,
+)
 
 
 ROOT = Path(__file__).resolve().parent.parent
+REGISTRY_PATH = "app/modules/registry.py"
+ALEMBIC_INI_PATH = "alembic.ini"
+STANDS = ("local", "dev", "test", "prod")
 
 app = typer.Typer(
     add_completion=False,
-    help="Скаффолдер шаблона: REST-сущности, брокер-консьюмеры, выпуск dev-JWT.",
+    help="Скаффолдер монолита: модули, REST-сущности, Kafka-консьюмеры, выпуск dev-JWT.",
 )
 
 
@@ -63,7 +76,11 @@ def _append_file(rel_path: str, snippet: str, marker: str, dry_run: bool) -> Non
 
 
 def _insert_after(rel_path: str, anchor: str, snippet: str, marker: str, dry_run: bool) -> None:
-    """Вставить snippet сразу после строки, содержащей anchor (если marker отсутствует)."""
+    """Вставить snippet сразу после строки, содержащей anchor (если marker отсутствует).
+
+    Raises:
+        typer.Exit: якорь не найден — сгенерированный код был бы неполным.
+    """
     path = ROOT / rel_path
     text = path.read_text(encoding="utf-8")
     if marker in text:
@@ -79,21 +96,15 @@ def _insert_after(rel_path: str, anchor: str, snippet: str, marker: str, dry_run
             path.write_text("".join(lines), encoding="utf-8")
             typer.secho(f"  ~ обновлён: {rel_path}", fg=typer.colors.GREEN)
             return
-    typer.secho(
-        f"  ! якорь не найден в {rel_path}: '{anchor}' — впиши вручную",
-        fg=typer.colors.RED,
-    )
+    typer.secho(f"  ! якорь не найден в {rel_path}: '{anchor}'", fg=typer.colors.RED, err=True)
+    raise typer.Exit(code=1)
 
 
 def _format(rel_paths: list[str], dry_run: bool) -> None:
-    """Привести затронутые файлы к стилю проекта (ruff: сортировка импортов + формат).
-
-    Делает вывод скаффолдера длинно-/коротко-имённо устойчивым: ruff сам решает,
-    обернуть импорт в скобки или оставить в строку, по `line-length` из pyproject.
-    """
+    """Привести затронутые Python-файлы к стилю проекта (ruff: сортировка импортов + формат)."""
     if dry_run:
         return
-    existing = [str(ROOT / p) for p in rel_paths if (ROOT / p).exists()]
+    existing = [str(ROOT / p) for p in rel_paths if p.endswith(".py") and (ROOT / p).exists()]
     if not existing:
         return
     for args in (["check", "--select", "I", "--fix", "--quiet"], ["format", "--quiet"]):
@@ -112,125 +123,259 @@ def _format(rel_paths: list[str], dry_run: bool) -> None:
     typer.secho("  ✓ применён ruff (импорты + формат) к затронутым файлам", fg=typer.colors.GREEN)
 
 
+# --- Реестр модулей ---------------------------------------------------------
+
+
+def read_registry() -> tuple[str, ...]:
+    """Прочитать `MODULES` из `app/modules/registry.py` без импорта приложения.
+
+    Raises:
+        typer.Exit: в файле нет присваивания `MODULES` кортежем строк.
+    """
+    tree = ast.parse((ROOT / REGISTRY_PATH).read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == "MODULES":
+            value = ast.literal_eval(node.value) if node.value is not None else None
+            if isinstance(value, tuple) and all(isinstance(item, str) for item in value):
+                return value
+    typer.secho(f"  ! в {REGISTRY_PATH} нет `MODULES: tuple[str, ...] = (...)`", fg=typer.colors.RED, err=True)
+    raise typer.Exit(code=1)
+
+
+def _write_registry(modules: tuple[str, ...], dry_run: bool) -> None:
+    """Перезаписать `registry.py` с новым списком модулей (порядок сохраняется)."""
+    if dry_run:
+        typer.secho(f"  ~ [dry-run] обновил бы: {REGISTRY_PATH}", fg=typer.colors.CYAN)
+        return
+    body = "(\n" + "".join(f'    "{name}",\n' for name in modules) + ")" if modules else "()"
+    (ROOT / REGISTRY_PATH).write_text(templates.render(templates.REGISTRY, MODULES=body), encoding="utf-8")
+    typer.secho(f"  ~ обновлён: {REGISTRY_PATH}", fg=typer.colors.GREEN)
+
+
+def _module_tokens(module: str) -> dict[str, str]:
+    """Токены шаблонов для имени модуля."""
+    return {
+        "MODULE": module,
+        "MODULE_PASCAL": to_pascal(module),
+        "MODULE_UPPER": module.upper(),
+        "MODULE_KEBAB": to_kebab(module),
+    }
+
+
+def _require_module(module: str) -> None:
+    """Проверить, что модуль уже создан скаффолдером.
+
+    Raises:
+        typer.Exit: модуля нет в реестре или нет его `module.py`.
+    """
+    if module not in read_registry() or not (ROOT / f"app/modules/{module}/module.py").exists():
+        typer.secho(
+            f"  ! модуль `{module}` не найден — сначала `make scaffold-module name={module}`",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+
 # --- Команды ----------------------------------------------------------------
+
+
+@app.command()
+def add_module(
+    name: str = typer.Argument(..., help="Имя модуля в snake_case, напр. identity или llm_gateway."),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Только показать, что будет сделано."),
+) -> None:
+    """Создать доменный модуль app/modules/<name> и зарегистрировать его (реестр, alembic.ini, envs, тесты)."""
+    if not is_valid_module_name(name):
+        typer.secho(f"  ! недопустимое имя модуля: {name!r} (snake_case, не зарезервировано)", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+    tokens = _module_tokens(name)
+    base = f"app/modules/{name}"
+    typer.secho(f"\nМодуль: {name} (REST /api/v1/{tokens['MODULE_KEBAB']}, схема PostgreSQL {name})\n", bold=True)
+
+    files = {
+        f"{base}/__init__.py": templates.MODULE_INIT,
+        f"{base}/module.py": templates.MODULE_DEFINITION,
+        f"{base}/public/__init__.py": templates.MODULE_PUBLIC_INIT,
+        f"{base}/models/__init__.py": templates.MODULE_MODELS_INIT,
+        f"{base}/settings.py": templates.MODULE_SETTINGS,
+        f"{base}/permissions.py": templates.MODULE_PERMISSIONS,
+        f"{base}/api/__init__.py": templates.MODULE_API_INIT,
+        f"{base}/api/router.py": templates.MODULE_ROUTER,
+        f"{base}/migrations/versions/.gitkeep": "",
+        "tests/modules/__init__.py": templates.MODULE_TESTS_PACKAGE_INIT,
+        f"tests/modules/{name}/__init__.py": templates.MODULE_TESTS_INIT,
+        f"tests/modules/{name}/conftest.py": templates.MODULE_TESTS_CONFTEST,
+    }
+    for layer in ("services", "dao", "schemas"):
+        files[f"{base}/{layer}/__init__.py"] = templates.render(templates.MODULE_LAYER_INIT, LAYER=layer)
+    for stand in STANDS:
+        files[f"envs/{stand}/{name}_{stand}.env"] = templates.render(templates.MODULE_ENV_FILE, STAND=stand)
+    for rel_path, template in files.items():
+        _create_file(rel_path, templates.render(template, **tokens), dry_run)
+
+    modules = read_registry()
+    if name in modules:
+        typer.secho(f"  = пропуск (уже в реестре): {REGISTRY_PATH}", fg=typer.colors.YELLOW)
+    else:
+        _write_registry((*modules, name), dry_run)
+
+    _append_file(
+        ALEMBIC_INI_PATH,
+        templates.render(templates.MODULE_ALEMBIC_SECTION, **tokens),
+        marker=f"[{name}]",
+        dry_run=dry_run,
+    )
+
+    _format([*files, REGISTRY_PATH], dry_run)
+
+    typer.secho("\nСледующие шаги:", bold=True)
+    typer.echo("  1. Подтверди место модуля в MODULES (порядок зависимостей SYS-01) в app/modules/registry.py")
+    typer.echo(f"  2. make scaffold-entity module={name} name=<Entity>")
+    typer.echo(f'  3. make makemigration module={name} name="init"  &&  make migrate')
+    typer.echo("  4. make check\n")
 
 
 @app.command()
 def add_entity(
     name: str = typer.Argument(..., help="Имя сущности в PascalCase, напр. Order или OrderItem."),
+    module: str = typer.Option(..., "--module", "-m", help="Модуль-владелец (создан `add-module`)."),
     dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Только показать, что будет сделано."),
 ) -> None:
-    """Сгенерировать REST-сущность (schema/dao/service/controller/test) и подключить роутер."""
-    pascal, snake, upper = to_pascal(name), to_snake(name), to_const(name)
-    typer.secho(f"\nREST-сущность: {pascal} (route /{snake})\n", bold=True)
+    """Сгенерировать REST-сущность модуля (model/schema/dao/service/controller/test) и подключить роутер."""
+    _require_module(module)
+    pascal, snake, kebab = to_pascal(name), to_snake(name), to_kebab(name)
+    tokens = {**_module_tokens(module), "PASCAL": pascal, "SNAKE": snake, "KEBAB": kebab}
+    base = f"app/modules/{module}"
+    typer.secho(f"\nREST-сущность: {module}.{pascal} (route /api/v1/{tokens['MODULE_KEBAB']}/{kebab}s)\n", bold=True)
 
-    tokens = {"PASCAL": pascal, "SNAKE": snake, "UPPER": upper}
-    _create_file(f"app/api/schemas/{snake}_schema.py", templates.render(templates.ENTITY_SCHEMA, **tokens), dry_run)
-    _create_file(f"app/api/dao/{snake}_dao.py", templates.render(templates.ENTITY_DAO, **tokens), dry_run)
-    _create_file(f"app/api/services/{snake}_service.py", templates.render(templates.ENTITY_SERVICE, **tokens), dry_run)
-    _create_file(
-        f"app/api/controllers/{snake}_controller.py",
-        templates.render(templates.ENTITY_CONTROLLER, **tokens),
-        dry_run,
-    )
-    _create_file(
-        f"tests/api/services/test_{snake}_service.py",
-        templates.render(templates.ENTITY_TEST, **tokens),
-        dry_run,
-    )
+    files = {
+        f"{base}/models/{snake}.py": templates.ENTITY_MODEL,
+        f"{base}/schemas/{snake}_schema.py": templates.ENTITY_SCHEMA,
+        f"{base}/dao/{snake}_dao.py": templates.ENTITY_DAO,
+        f"{base}/services/{snake}_service.py": templates.ENTITY_SERVICE,
+        f"{base}/api/{snake}_controller.py": templates.ENTITY_CONTROLLER,
+        f"tests/modules/{module}/services/__init__.py": templates.render(
+            templates.MODULE_LAYER_INIT, LAYER="services (тесты)"
+        ),
+        f"tests/modules/{module}/services/test_{snake}_service.py": templates.ENTITY_TEST,
+    }
+    for rel_path, template in files.items():
+        _create_file(rel_path, templates.render(template, **tokens), dry_run)
 
     _append_file(
-        "app/core/security/permissions.py",
+        f"{base}/models/__init__.py",
+        templates.render(templates.ENTITY_MODEL_IMPORT, **tokens),
+        marker=f"models.{snake} import",
+        dry_run=dry_run,
+    )
+    _append_file(
+        f"{base}/permissions.py",
         templates.render(templates.ENTITY_PERMISSIONS, **tokens),
         marker=f"class {pascal}Permissions",
         dry_run=dry_run,
     )
-
-    router_snippet = (
-        f"from app.api.controllers.{snake}_controller import router as {snake}_router  # noqa: E402\n\n"
-        f"v1_router.include_router({snake}_router)\n"
-    )
     _append_file(
-        "app/api/controllers/__init__.py",
-        router_snippet,
+        f"{base}/api/router.py",
+        templates.render(templates.ENTITY_ROUTER_INCLUDE, **tokens),
         marker=f"{snake}_router",
         dry_run=dry_run,
     )
 
     _format(
-        [
-            f"app/api/schemas/{snake}_schema.py",
-            f"app/api/dao/{snake}_dao.py",
-            f"app/api/services/{snake}_service.py",
-            f"app/api/controllers/{snake}_controller.py",
-            f"tests/api/services/test_{snake}_service.py",
-            "app/core/security/permissions.py",
-            "app/api/controllers/__init__.py",
-        ],
+        [*files, f"{base}/models/__init__.py", f"{base}/permissions.py", f"{base}/api/router.py"],
         dry_run,
     )
 
-    typer.secho("\nСледующие шаги (вручную):", bold=True)
-    typer.echo(f"  1. Добавь модель `{pascal}` в app/core/dao/models.py, напр.:")
-    typer.echo(f"       class {pascal}(BaseEntityModel, SchemaBase):")
-    typer.echo(f'           __tablename__ = "{snake}"')
-    typer.echo('           name: Mapped[str] = mapped_column(String, comment="Название")')
-    typer.echo(f'  2. make makemigration name="add_{snake}"  &&  make migrate')
-    typer.echo("  3. Уточни значения прав в app/core/security/permissions.py")
+    typer.secho("\nСледующие шаги:", bold=True)
+    typer.echo(f"  1. Допиши поля модели в {base}/models/{snake}.py")
+    typer.echo(f'  2. make makemigration module={module} name="add_{snake}"  &&  make migrate')
+    typer.echo(f"  3. Уточни права в {base}/permissions.py (SYS-06)")
     typer.echo("  4. make check\n")
 
 
 @app.command()
 def add_subscriber(
-    topic: str = typer.Argument(..., help="Имя enum-члена топика, напр. ORDER_CREATED."),
-    value: str = typer.Argument(..., help="Значение Kafka-топика, напр. svc.order.created.01."),
+    topic: str = typer.Argument(..., help="Имя enum-члена топика, напр. USER_DELETED."),
+    value: str = typer.Argument(..., help="Топик: flt.<module>.<event>.v<N> или flt.<module>.jobs.<job>.v<N>."),
+    module: str = typer.Option(..., "--module", "-m", help="Модуль-потребитель (создан `add-module`)."),
     dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Только показать, что будет сделано."),
 ) -> None:
-    """Сгенерировать Kafka-сабскрайбер: схему, сервис, enum-член и хендлер."""
+    """Сгенерировать Kafka-консьюмер модуля: схему, сервис, член enum и хендлер на роутере модуля."""
+    _require_module(module)
+    if not is_valid_topic(value):
+        typer.secho(
+            f"  ! топик {value!r} не по формату flt.<module>.<event>.v<N> | flt.<module>.jobs.<job>.v<N> (SYS-04)",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+
     const, snake, pascal = to_const(topic), to_snake(topic), to_pascal(topic)
-    typer.secho(f'\nKafka subscriber: {const} = "{value}"\n', bold=True)
+    tokens = {**_module_tokens(module), "PASCAL": pascal, "SNAKE": snake, "CONST": const, "VALUE": value}
+    base = f"app/modules/{module}"
+    typer.secho(f'\nKafka subscriber: {module}.{const} = "{value}"\n', bold=True)
 
-    tokens = {"PASCAL": pascal, "SNAKE": snake, "CONST": const, "VALUE": value}
+    files = {
+        f"{base}/brokers/__init__.py": templates.BROKERS_INIT,
+        f"{base}/brokers/router.py": templates.BROKERS_ROUTER,
+        f"{base}/brokers/topics.py": templates.BROKERS_TOPICS,
+        f"{base}/brokers/subscribers.py": templates.BROKERS_SUBSCRIBERS,
+        f"{base}/brokers/messages/__init__.py": templates.BROKERS_MESSAGES_INIT,
+        f"{base}/brokers/messages/{snake}_message.py": templates.SUBSCRIBER_SCHEMA,
+        f"{base}/services/{snake}_message_service.py": templates.SUBSCRIBER_SERVICE,
+    }
+    for rel_path, template in files.items():
+        _create_file(rel_path, templates.render(template, **tokens), dry_run)
 
-    _create_file(
-        f"app/brokers/kafka/schemas/subscriber_messages/{snake}_schema.py",
-        templates.render(templates.SUBSCRIBER_SCHEMA, **tokens),
-        dry_run,
-    )
-    _create_file(
-        f"app/brokers/kafka/services/{snake}_service.py",
-        templates.render(templates.SUBSCRIBER_SERVICE, **tokens),
-        dry_run,
-    )
-    _insert_after(
-        "app/brokers/kafka/schemas/enums.py",
-        anchor='"""Kafka Subscriber Topics."""',
-        snippet=f'\n    {const} = "{value}"\n',  # ведущая пустая строка после docstring (black)
+    _append_file(
+        f"{base}/brokers/topics.py",
+        templates.render(templates.SUBSCRIBER_TOPIC_MEMBER, **tokens),
         marker=f"{const} =",
         dry_run=dry_run,
     )
+    _insert_after(
+        f"{base}/brokers/subscribers.py",
+        anchor=f"from app.modules.{module}.brokers.router import kafka_router",
+        snippet=templates.render(templates.SUBSCRIBER_HANDLER_IMPORTS, **tokens),
+        marker=f"messages.{snake}_message import",
+        dry_run=dry_run,
+    )
     _append_file(
-        "app/brokers/kafka/subscribers.py",
+        f"{base}/brokers/subscribers.py",
         templates.render(templates.SUBSCRIBER_HANDLER, **tokens),
-        marker=f"subscriber_to_{snake}",
+        marker=f"def handle_{snake}(",
+        dry_run=dry_run,
+    )
+    _insert_after(
+        f"{base}/module.py",
+        anchor="from app.core.modules import ModuleDefinition",
+        snippet=templates.render(templates.MODULE_KAFKA_IMPORTS, **tokens),
+        marker="brokers.router import kafka_router",
+        dry_run=dry_run,
+    )
+    _insert_after(
+        f"{base}/module.py",
+        anchor="router=router,",
+        snippet="    kafka_router=kafka_router,\n",
+        marker="kafka_router=kafka_router",
         dry_run=dry_run,
     )
 
-    _format(
-        [
-            f"app/brokers/kafka/schemas/subscriber_messages/{snake}_schema.py",
-            f"app/brokers/kafka/services/{snake}_service.py",
-            "app/brokers/kafka/schemas/enums.py",
-            "app/brokers/kafka/subscribers.py",
-        ],
-        dry_run,
-    )
+    _format([*files, f"{base}/module.py"], dry_run)
 
-    typer.secho("\nСледующие шаги (вручную):", bold=True)
-    typer.echo(f"  1. Реализуй бизнес-логику в app/brokers/kafka/services/{snake}_service.py")
-    typer.echo(f"  2. Уточни payload в схеме {pascal}Schema при необходимости")
-    typer.echo("  3. Добавь тест в tests/brokers/kafka/ (см. test_kafka_subscribers.py)")
+    typer.secho("\nСледующие шаги:", bold=True)
+    typer.echo(f"  1. Реализуй бизнес-логику в {base}/services/{snake}_message_service.py")
+    typer.echo(f"  2. Уточни payload в {base}/brokers/messages/{snake}_message.py")
+    typer.echo(f"  3. Добавь тест в tests/modules/{module}/brokers/ (TestKafkaBroker)")
     typer.echo("  4. make check\n")
+
+
+@app.command()
+def list_modules() -> None:
+    """Напечатать модули реестра построчно (используют `make migrate` и CI)."""
+    for name in read_registry():
+        typer.echo(name)
 
 
 @app.command()

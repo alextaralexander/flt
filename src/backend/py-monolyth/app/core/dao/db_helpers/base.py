@@ -1,7 +1,7 @@
-"""Декларативная база моделей SQLAlchemy 2.0.
+"""Декларативные базы моделей SQLAlchemy 2.0: своя схема PostgreSQL на модуль (ADR-002, ADR-003).
 
-Вынесена отдельно от подключения к БД: импорт моделей (например, в Alembic
-autogenerate или скриптах) не должен тянуть за собой создание engine.
+Вынесено отдельно от подключения к БД: импорт моделей (Alembic autogenerate, скрипты,
+тесты) не тянет за собой создание engine.
 """
 
 from sqlalchemy import MetaData
@@ -19,7 +19,47 @@ NAMING_CONVENTION = {
 }
 
 
-class Base(DeclarativeBase):
-    """Базовый класс всех моделей проекта."""
+def module_metadata(schema: str) -> MetaData:
+    """Метаданные моделей модуля: схема PostgreSQL `schema` и общая конвенция имён.
 
-    metadata = MetaData(naming_convention=NAMING_CONVENTION)
+    Args:
+        schema: Имя модуля — оно же имя схемы PostgreSQL.
+
+    Returns:
+        Новый объект `MetaData(schema=schema, naming_convention=NAMING_CONVENTION)`.
+
+    Raises:
+        ValueError: имя схемы пустое, не идентификатор или `public` (схема `public` таблиц не содержит, ADR-003).
+    """
+    if not schema.isidentifier() or schema == "public":
+        raise ValueError(f"Недопустимая схема модуля: {schema!r}.")
+    return MetaData(schema=schema, naming_convention=NAMING_CONVENTION)
+
+
+def make_module_base(schema: str) -> type[DeclarativeBase]:
+    """Создаёт декларативную базу моделей модуля: все её таблицы живут в схеме `schema`.
+
+    Для динамического создания базы (тесты, инструменты). В коде модуля база объявляется
+    классом, чтобы mypy видел её как тип (так генерирует скаффолдер):
+
+        class Base(DeclarativeBase):
+            metadata = module_metadata("<module>")
+
+    Args:
+        schema: Имя модуля — оно же имя схемы PostgreSQL.
+
+    Returns:
+        Новый класс `DeclarativeBase` с метаданными `module_metadata(schema)`.
+
+    Raises:
+        ValueError: недопустимое имя схемы (см. `module_metadata`).
+    """
+    metadata_of_module = module_metadata(schema)
+
+    class Base(DeclarativeBase):
+        """Базовый класс моделей одного модуля (схема задаётся `metadata`)."""
+
+        metadata = metadata_of_module
+
+    Base.__doc__ = f"Базовый класс моделей модуля `{schema}` (схема PostgreSQL `{schema}`)."
+    return Base

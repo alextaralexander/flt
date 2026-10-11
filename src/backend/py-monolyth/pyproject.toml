@@ -100,7 +100,8 @@ skips = ["B101"]
 [tool.ruff]
 line-length = 120
 target-version = "py314"
-extend-exclude = ["app/core/dao/db_helpers/migrations/versions"]
+# Ревизии Alembic модулей генерирует autogenerate — их не форматируем и не линтим.
+extend-exclude = ["app/modules/*/migrations/versions"]
 
 [tool.ruff.lint]
 select = [
