@@ -1,15 +1,18 @@
 {
-  "name": "bulletproof-react-vite",
+  "name": "flt-frontend",
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build --base=/",
     "preview": "vite preview",
     "test": "vitest",
-    "test-e2e": "pm2 start \"yarn run-mock-server\" --name server && yarn playwright test",
-    "prepare": "husky",
+    "test-e2e": "pm2 start \"pnpm run-mock-server\" --name server && pnpm exec playwright test",
     "lint": "eslint src --ignore-path .gitignore",
     "check-types": "tsc --project tsconfig.json --pretty --noEmit",
     "generate": "plop",
@@ -91,7 +94,6 @@
     "eslint-plugin-testing-library": "^6.2.2",
     "eslint-plugin-vitest": "^0.5.4",
     "express": "^4.19.2",
-    "husky": "^9.0.11",
     "jest-environment-jsdom": "^29.7.0",
     "js-cookie": "^3.0.5",
     "jsdom": "^24.0.0",
@@ -115,9 +117,18 @@
     "workerDirectory": "public"
   },
   "lint-staged": {
-    "*.+(ts|tsx)": [
-      "yarn lint",
-      "bash -c 'yarn check-types'"
+    "*.{ts,tsx,js,cjs,mjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,md,yaml,yml}": [
+      "prettier --write"
+    ]
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "msw"
     ]
   }
 }

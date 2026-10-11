@@ -1,30 +1,30 @@
-# React Vite Application
+# FLT frontend
 
-## Get Started
+React-приложение FLT на основе [bulletproof-react](https://github.com/alan2207/bulletproof-react) (`apps/react-vite`, лицензия MIT — `LICENSE`).
+Стек, версии и правила — ADR-005 (`Analytics/ADR/ADR-005-frontend-stack.md`), архитектура — `docs/`.
 
-Prerequisites:
+## Начало работы
 
-- Node 20+
-- Yarn 1.22+
+Требования:
 
-To set up the app execute the following commands.
+- Node.js 24 LTS (`.nvmrc`)
+- pnpm 10 через Corepack (`corepack enable`; версия задана полем `packageManager` в `package.json`)
 
 ```bash
-git clone https://github.com/alan2207/bulletproof-react.git
-cd bulletproof-react
-cd apps/react-vite
+cd src/frontend
 cp .env.example .env
-yarn install
+corepack enable
+pnpm install
 ```
 
-##### `yarn dev`
+## Команды
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
-
-##### `yarn build`
-
-Builds the app for production to the `dist` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-See the section about [deployment](https://vitejs.dev/guide/static-deploy) for more information.
+| Команда | Что делает |
+|---|---|
+| `pnpm dev` | dev-сервер на порту 3000 |
+| `pnpm build` | production-сборка в `dist/` |
+| `pnpm lint` | ESLint |
+| `pnpm check-types` | проверка типов |
+| `pnpm test` | Vitest |
+| `pnpm test-e2e` | Playwright на mock-сервере |
+| `pnpm storybook` | Storybook на порту 6006 |
