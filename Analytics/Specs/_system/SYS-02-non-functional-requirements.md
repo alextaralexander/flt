@@ -212,7 +212,7 @@
 
 - **Формулировка**: Зависимости должны обновляться по политике ADR-001 (Renovate); в CI должен выполняться еженедельный и на каждый PR с изменением lock-файлов аудит уязвимостей: `uv run pip-audit` для backend, агента и `src/tools`, `pnpm audit --prod --audit-level=high` для frontend, Trivy для образов `flt-backend` и `flt-frontend` (уровни CRITICAL и HIGH с доступным исправлением); находка блокирует слияние, исключение оформляется записью в разделе 6 со сроком.
 - **Обоснование**: ASVS V14; ADR-001, ADR-011 (job-ы CI), ADR-013 (контроль утечек).
-- **Проверка**: job `dependency-audit` в `ci.yml` (`<будет создан>`, дополнение к ADR-011 — см. отчёт) с `schedule: cron` и триггером по путям `uv.lock`, `pnpm-lock.yaml`; шаг Trivy в job `images`.
+- **Проверка**: job `dependency-audit` в `ci.yml` (`<будет создан>`, SYS-12-R35) с `schedule: cron` и триггером по путям `uv.lock`, `pnpm-lock.yaml`; шаг Trivy в job `images` (SYS-12-R36).
 - **Применимость**: CI.
 
 ### SYS-02-R25 Проверка входных данных и загрузок
@@ -684,4 +684,4 @@ async def test_suspend_user_is_audited(admin_client, audit_records, learner):
 | Версия | Дата | Автор | Что изменилось | Статус |
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
-| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: таблица категорий ПД — строка «Учёт расхода AI» (`usage_records` 400 суток, агрегаты без `user_id` бессрочно); R35, R37 — ссылка на OQ-78 (пункт BRD, этап 3); R57 — второе хранилище OQ-79; новое R61 «Шифрование данных в покое» (диск VPS по SYS-11-R23 п. 9, OQ-80); пример ошибки согласия — конверт SYS-03-R7, код `llm_gateway.consent_required`, поля привязки SYS-08; пути тестов N3 — `tests/n_instances/core/`; раздел 9 — OQ-78, OQ-79, OQ-80 | draft |
+| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: таблица категорий ПД — строка «Учёт расхода AI» (`usage_records` 400 суток, агрегаты без `user_id` бессрочно); R35, R37 — ссылка на OQ-78 (пункт BRD, этап 3); R57 — второе хранилище OQ-79; новое R61 «Шифрование данных в покое» (диск VPS по SYS-11-R23 п. 9, OQ-80); пример ошибки согласия — конверт SYS-03-R7, код `llm_gateway.consent_required`, поля привязки SYS-08; пути тестов N3 — `tests/n_instances/core/`; раздел 9 — OQ-78, OQ-79, OQ-80; R24 проверка — ссылки на SYS-12-R35, R36 | draft |
