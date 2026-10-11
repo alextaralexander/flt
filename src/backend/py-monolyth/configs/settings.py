@@ -53,6 +53,10 @@ class Settings(BaseSettings):
         default=None,
         description="Роль запуска (ADR-004): api, worker, all, migrate, media_agent; по умолчанию all только на local.",
     )
+    APP_VERSION: str = Field(
+        default="dev",
+        description="Версия приложения (тег образа) — метка `version` метрики `flt_instance_info` (SYS-12-R21).",
+    )
     WORKER_HTTP_PORT: int = Field(
         default=8001,
         description="Служебный HTTP-порт ролей worker и media_agent (/v1/health, /v1/ready, /v1/metrics).",

@@ -86,6 +86,11 @@ def get_engine() -> AsyncEngine:
     return _engine
 
 
+def current_engine() -> AsyncEngine | None:
+    """Engine процесса, если он уже создан (для метрик пула; новый не создаёт)."""
+    return _engine
+
+
 def get_session_maker() -> async_sessionmaker[AsyncSession]:
     """Фабрика асинхронных сессий (создаётся при первом вызове)."""
     global _session_maker

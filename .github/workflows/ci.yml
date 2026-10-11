@@ -190,6 +190,17 @@ jobs:
           --health-cmd "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092"
           --health-interval 10s --health-timeout 10s --health-retries 15 --health-start-period 20s
         ports: ["9092:9092"]
+      minio:
+        # Хранилище файлов (ADR-007, SYS-10-R23); образ — как в deploy/docker-compose/docker-compose.yml (OQ-64).
+        image: bitnamilegacy/minio:2025.7.23
+        env:
+          MINIO_ROOT_USER: flt_local_minio
+          MINIO_ROOT_PASSWORD: flt_local_minio_secret # pragma: allowlist secret
+          MINIO_BROWSER: "off"
+        options: >-
+          --health-cmd "curl -fsS http://127.0.0.1:9000/minio/health/live"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+        ports: ["9000:9000"]
     steps:
       - name: backend not changed — always-report success
         if: env.CHANGED != 'true'

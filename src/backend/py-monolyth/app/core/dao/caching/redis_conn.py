@@ -73,6 +73,13 @@ async def get_redis_client() -> redis.Redis:
     return _redis_client
 
 
+def current_redis_pool() -> object | None:
+    """Пул соединений общего клиента Redis, если клиент уже создан (для метрик пула)."""
+    if _redis_client is None:
+        return None
+    return _redis_client.connection_pool
+
+
 async def close_redis_client() -> None:
     """Закрыть общий Redis-клиент (вызывается из lifespan при shutdown)."""
     global _redis_client, _redis_client_loop

@@ -60,6 +60,7 @@ dependencies = [
     # Внутренняя библиотека: path-зависимость uv (ADR-001, OQ-69), её зависимости учитывает uv.lock.
     "py-main-lib",
     "babel>=2.17,<3",
+    "aioboto3>=15,<16",
 ]
 
 [dependency-groups]
@@ -185,6 +186,11 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 # aiokafka не публикует стабы / py.typed.
 module = ["aiokafka.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# aioboto3 и botocore без py.typed; импортируются только в app/core/storage (ADR-007).
+module = ["aioboto3.*", "botocore.*"]
 ignore_missing_imports = true
 
 # --- Pytest / coverage ---------------------------------------------------------

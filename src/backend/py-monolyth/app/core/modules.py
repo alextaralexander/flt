@@ -58,6 +58,7 @@ class ModuleDefinition:
         schedules: Периодические задачи модуля из `schedules.py` (SYS-04-R32).
         outbox: Таблица outbox модуля (`outbox_table(metadata)`); для неё роль `worker` запускает
             relay (SYS-04-R24).
+        storage: Модулю нужен бакет `flt-<module>`; его создаёт `cli storage-init` роли `migrate` (ADR-007).
     """
 
     name: str
@@ -75,6 +76,7 @@ class ModuleDefinition:
     topics: tuple[TopicDeclaration, ...] = ()
     schedules: tuple[ScheduleDeclaration, ...] = ()
     outbox: Table | None = None
+    storage: bool = False
 
 
 class ModuleLoadError(RuntimeError):

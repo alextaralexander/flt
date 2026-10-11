@@ -446,5 +446,17 @@ def list_modules() -> None:
         typer.echo(name)
 
 
+@app.command()
+def storage_init() -> None:
+    """Создать бакеты `flt-<module>` модулей реестра с `storage=True` (ADR-007; выполняет роль `migrate`)."""
+    import asyncio  # приложение импортируется только этой командой
+
+    from app.core.modules import load_modules
+    from app.core.storage.init import init_storage
+
+    created = asyncio.run(init_storage(load_modules(read_registry())))
+    typer.echo(f"Созданы бакеты: {', '.join(created) or 'нет'}")
+
+
 if __name__ == "__main__":
     app()

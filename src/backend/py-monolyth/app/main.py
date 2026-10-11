@@ -19,13 +19,14 @@ from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
 from faststream.asgi import AsgiFastStream
+from faststream.kafka import KafkaBroker
 from opentelemetry.sdk.trace import TracerProvider
 from starlette.middleware.cors import CORSMiddleware
 
 from app.core.container import container
 from app.core.dao.caching import ModuleRedis
-from app.core.dao.caching.redis_conn import close_redis_client
-from app.core.dao.db_helpers.db_connection import dispose_engine, get_engine, get_session_maker
+from app.core.dao.caching.redis_conn import close_redis_client, current_redis_pool
+from app.core.dao.db_helpers.db_connection import current_engine, dispose_engine, get_engine, get_session_maker
 from app.core.http.body_limit import BodyLimitMiddleware
 from app.core.http.context import RequestContextMiddleware
 from app.core.http.deprecation import DeprecationMiddleware
@@ -39,8 +40,12 @@ from app.core.kafka.scheduler import Scheduler
 from app.core.logging import logger_settings
 from app.core.metrics.metrics_controller import router as service_router
 from app.core.metrics.metrics_middleware import PrometheusMiddleware
+from app.core.metrics.process_metrics import publish_instance_info, register_pool_collector
+from app.core.metrics.readiness import ReadinessProbe, check_postgres
 from app.core.modules import ModuleDefinition, install_modules, load_modules, module_routers
 from app.core.telemetry import SERVICE_NAME, setup_telemetry, stop_telemetry
+from app.core.ws.endpoint import create_ws_router
+from app.core.ws.hub import WsHub
 from app.modules.registry import MODULES
 from configs.settings import AppRole, settings
 
@@ -52,6 +57,7 @@ ASYNCAPI_PATH = "/asyncapi/kafka"
 OPENAPI_URL = "/api/openapi.json"
 DOCS_URL = "/api/docs"
 REDOC_URL = "/api/redoc"
+KAFKA_PING_TIMEOUT_SECONDS = 1.5
 # Страница OAuth2-redirect Swagger UI — тоже под /api (по умолчанию FastAPI ставит /docs/oauth2-redirect).
 DOCS_OAUTH2_REDIRECT_URL = f"{DOCS_URL}/oauth2-redirect"
 
@@ -72,10 +78,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         if worker is not None:
             await stack.enter_async_context(worker.start_lifespan_context())
         yield
+        # Соединения /ws закрываются кодом 1012 до освобождения Redis (SYS-04-R18).
+        hub: WsHub | None = getattr(app.state, "ws_hub", None)
+        if hub is not None:
+            await hub.stop()
 
     await close_redis_client()
     await dispose_engine()
     stop_telemetry(tracer_provider)
+
+
+def _publish_process_metrics(role: AppRole) -> None:
+    """`flt_instance_info` процесса и коллектор пулов PostgreSQL и Redis (ADR-010)."""
+    publish_instance_info(role)
+    register_pool_collector(current_engine, current_redis_pool)
+
+
+async def _ping_kafka(broker: KafkaBroker) -> None:
+    """Проверка Kafka для readiness роли `worker`: брокер подключён и отвечает."""
+    if not await broker.ping(timeout=KAFKA_PING_TIMEOUT_SECONDS):
+        raise ConnectionError("Kafka недоступна")
 
 
 def _resolve_modules(modules: Sequence[ModuleDefinition] | None) -> Sequence[ModuleDefinition]:
@@ -113,6 +135,9 @@ def create_app(modules: Sequence[ModuleDefinition] | None = None, role: AppRole 
         redoc_url=REDOC_URL,
         swagger_ui_oauth2_redirect_url=DOCS_OAUTH2_REDIRECT_URL,
     )
+    _publish_process_metrics(resolved_role)
+    # Readiness роли `api` (и `all`): PostgreSQL; Redis не входит (ADR-010, раздел 3.4).
+    application.state.readiness = ReadinessProbe({"postgres": check_postgres})
     if resolved_role is AppRole.ALL:
         application.state.worker = create_worker_app(resolved_modules, manage_resources=False, role=resolved_role)
 
@@ -131,6 +156,10 @@ def create_app(modules: Sequence[ModuleDefinition] | None = None, role: AppRole 
     application.add_middleware(IdempotencyMiddleware)
 
     application.include_router(service_router)
+    # WebSocket `/ws`: каналы и команды модулей — через ModuleDefinition.ws_handlers (SYS-04-R1).
+    application.state.ws_hub = WsHub([handler for module in resolved_modules for handler in module.ws_handlers])
+    # Маршрут добавляется напрямую: include_router теряет путь WebSocket-маршрута в iter_route_contexts FastAPI.
+    application.router.routes.extend(create_ws_router(application.state.ws_hub).routes)
     for router in module_routers(resolved_modules):
         application.include_router(router)
 
@@ -176,6 +205,10 @@ def create_worker_app(
     resolved = _resolve_modules(modules)
     broker = create_broker(resolved, role=role)
     service_app = create_service_app()
+    if role is AppRole.WORKER:
+        _publish_process_metrics(role)
+    # Readiness роли `worker`: PostgreSQL и Kafka (ADR-010, раздел 3.4).
+    service_app.state.readiness = ReadinessProbe({"postgres": check_postgres, "kafka": lambda: _ping_kafka(broker)})
     # Приёмник DLQ консьюмеров и relay outbox — брокер процесса (SYS-04-R24, R27).
     container.register(OutboxSink, lambda: BrokerSink(broker), replace=True)
     relay_tasks: list[asyncio.Task[None]] = []

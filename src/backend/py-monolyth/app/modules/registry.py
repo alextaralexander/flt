@@ -6,4 +6,4 @@
 `create_app()`, роль `worker`, общий `env.py` Alembic и `python -m cli list-modules`.
 """
 
-MODULES: tuple[str, ...] = ()
+MODULES: tuple[str, ...] = ("identity",)

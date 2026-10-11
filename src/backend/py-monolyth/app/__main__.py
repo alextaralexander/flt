@@ -30,6 +30,7 @@ from app.core.kafka.dlq import DlqReplayLimitError, list_dlq, replay_dlq
 from app.core.kafka.topics_admin import apply_topics
 from app.core.logging import app_logger, logger_settings
 from app.core.modules import load_modules
+from app.core.storage.init import init_storage
 from app.main import create_app, create_worker_app
 from app.modules.registry import MODULES
 from configs.settings import AppRole, settings
@@ -74,11 +75,14 @@ def run_migrations(modules: Sequence[str] = MODULES) -> None:
 
 
 def run_migrate(modules: Sequence[str] = MODULES) -> None:
-    """Роль `migrate`: миграции модулей, затем топики Kafka и их DLQ по декларациям (SYS-04-R23)."""
+    """Роль `migrate`: миграции модулей, топики Kafka и их DLQ (SYS-04-R23), бакеты хранилища (ADR-007)."""
     run_migrations(modules)
-    declarations = [topic for module in load_modules(modules) for topic in module.topics]
+    definitions = load_modules(modules)
+    declarations = [topic for module in definitions for topic in module.topics]
     created = asyncio.run(apply_topics(declarations))
     app_logger.info("Топики Kafka готовы", declared=len(declarations), created=len(created))
+    buckets = asyncio.run(init_storage(definitions))
+    app_logger.info("Хранилище готово", created=len(buckets))
 
 
 def run_dlq(args: Sequence[str]) -> int:

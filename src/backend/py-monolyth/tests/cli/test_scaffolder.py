@@ -85,7 +85,8 @@ class TestScaffoldedModule:
             "migrations/versions/.gitkeep",
         ):
             assert (base / rel_path).exists(), rel_path
-        assert _run(scaffolded_tree, "-m", "cli", "list-modules").stdout.split() == [MODULE]
+        # Новый модуль дописывается в конец реестра, существующие модули остаются на местах.
+        assert _run(scaffolded_tree, "-m", "cli", "list-modules").stdout.split()[-1] == MODULE
         alembic_ini = (scaffolded_tree / "alembic.ini").read_text(encoding="utf-8")
         assert f"[{MODULE}]" in alembic_ini
         assert f"flt_module = {MODULE}" in alembic_ini
@@ -122,7 +123,7 @@ class TestScaffoldedModule:
         script = (
             "from app.core.modules import load_modules\n"
             "from app.modules.registry import MODULES\n"
-            "[m] = load_modules(MODULES)\n"
+            f"[m] = [d for d in load_modules(MODULES) if d.name == {MODULE!r}]\n"
             "from app.main import create_app\n"
             "print('@@', m.router.prefix)\n"
             "print('@@', sorted(create_app([m]).openapi()['paths'])[0])\n"
@@ -156,7 +157,7 @@ class TestScaffoldedDelivery:
         script = (
             "from app.core.modules import load_modules\n"
             "from app.modules.registry import MODULES\n"
-            "[m] = load_modules(MODULES)\n"
+            f"[m] = [d for d in load_modules(MODULES) if d.name == {MODULE!r}]\n"
             "print('@@', m.outbox.fullname)\n"
             "print('@@', ','.join(sorted(t.name for t in m.metadata.tables.values())))\n"
             "print('@@', ','.join(f'{t.name}:{t.kind}:{t.visibility}' for t in m.topics))\n"
