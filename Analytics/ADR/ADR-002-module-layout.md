@@ -3,8 +3,8 @@
 | Поле | Значение |
 |---|---|
 | Статус | accepted |
-| Версия | 1.0 |
-| Дата | 2026-10-10 |
+| Версия | 1.1 |
+| Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | пользователь, 2026-10-10 (PR #2) |
 | Пункт(ы) BRD | все |
@@ -195,6 +195,7 @@ src/backend/py-monolyth/
           schemas.py                 # Pydantic-схемы, которые видят другие модули
           events.py                  # схемы доменных событий модуля (топики — SYS-04)
           errors.py                  # доменные ошибки, которые могут получить другие модули
+          topics.py                  # декларации TopicDeclaration топиков модуля с полем visibility (формат имени и поля — SYS-04)
         api/
           router.py                  # APIRouter(prefix="/api/v1/identity"); включает роутеры ресурсов (ADR-004); identity дополнительно владеет /api/v1/auth
           user_controller.py         # контроллеры по ресурсам (как в boilerplate)
@@ -209,12 +210,11 @@ src/backend/py-monolyth/
           router.py                  # KafkaRouter модуля; subscribers.py и publishers.py подключаются к нему
           subscribers.py
           publishers.py
-          topics.py                  # StrEnum топиков модуля (формат имени — SYS-04)
           messages/                  # схемы сообщений (входящих и исходящих)
         migrations/                  # ревизии Alembic только этого модуля
           versions/
         settings.py                  # IdentitySettings(BaseSettings), env_prefix="IDENTITY_"
-        permissions.py               # мнемокоды прав модуля (матрица — SYS-06)
+        permissions.py               # коды прав модуля <module>:<resource>:<action> (формат и матрица — SYS-06)
       llm_gateway/                   # та же структура
   configs/                           # инфраструктурные настройки процесса: БД, Redis, Kafka, Vault, стенды
   cli/                               # скаффолдер (раздел 3.7)
@@ -300,7 +300,7 @@ class ModuleDefinition:
     kafka_router: KafkaRouter | None = None    # Kafka-роутер модуля
     ws_handlers: tuple = ()                    # обработчики WebSocket (контракт — ADR-004, SYS-04)
     settings: BaseSettings | None = None       # настройки модуля
-    permissions: tuple[str, ...] = field(default_factory=tuple)  # мнемокоды прав модуля
+    permissions: tuple[str, ...] = field(default_factory=tuple)  # коды прав модуля (SYS-06)
 
 
 def load_modules(names: tuple[str, ...]) -> list[ModuleDefinition]:
@@ -324,7 +324,7 @@ MODULES: tuple[str, ...] = (
 ### 3.3. Настройки, права и Redis модуля
 
 - Настройки: `app/modules/<module>/settings.py` объявляет `class <Module>Settings(BaseSettings)` с `model_config = SettingsConfigDict(env_prefix="<MODULE>_", env_file=stand_env_file("<module>"), extra="ignore")`; файл стенда — `envs/<stand>/<module>_<stand>.env` (уже поддерживается `configs.stands.stand_env_file(prefix)`). Секреты модуля — только переменные окружения, поля `SecretStr` без значения по умолчанию (клиент Vault из boilerplate удаляется — ADR-013). В docker-compose и Helm переменные модуля передаются с тем же префиксом (паритет — SYS-11).
-- Права: мнемокоды модуля — в `app/modules/<module>/permissions.py` (`class UserPermissions: GET_MODEL = "IDENTITY_GET_USER"`), с префиксом `<MODULE>_`, чтобы коды модулей не пересекались; `ModuleDefinition.permissions` перечисляет их для матрицы SYS-06 и для тестов.
+- Права: коды прав модуля — в `app/modules/<module>/permissions.py` (`class UserPermissions: READ = "identity:users:read"`), с первым сегментом — именем модуля, чтобы коды модулей не пересекались (формат `<module>:<resource>:<action>` и области `own`/`rel`/`any` — SYS-06); `ModuleDefinition.permissions` перечисляет их для матрицы SYS-06 и для тестов.
 - Redis: `app/core/dao/caching/module_redis.py` даёт `ModuleRedis(prefix="identity")` с методами `get`, `set` (TTL обязателен), `delete`, `publish` и доступом к блокировкам и лимитам; все ключи получают префикс `identity:`. Модуль не импортирует ни пакет `redis`, ни общий клиент `redis_conn` (контракты `forbidden`). Состав методов, устройство блокировок, pub/sub и TTL — ADR-003 и SYS-05.
 
 ### 3.4. Схема PostgreSQL и миграции модуля
@@ -466,7 +466,7 @@ allow_indirect_imports = True
 | `test_registry_and_contracts_are_complete` | Каждый каталог `app/modules/<name>` (кроме `registry.py`) есть в `MODULES`, в контрактах 1–3 `.importlinter` и в секциях `alembic.ini`; и наоборот | Сравнение множеств имён |
 | `test_no_cross_module_foreign_keys` | Ни одна таблица модуля не ссылается `ForeignKey` на таблицу другой схемы | Обход `module.metadata.tables` для всех модулей реестра |
 | `test_module_tables_live_in_module_schema` | Все таблицы `module.metadata` имеют `schema == module.name` | Обход метаданных |
-| `test_module_settings_prefix` | `env_prefix` настроек модуля равен `<MODULE>_`, у `permissions` — префикс `<MODULE>_` | Проверка `model_config` и значений |
+| `test_module_settings_prefix` | `env_prefix` настроек модуля равен `<MODULE>_`, у кодов `permissions` — первый сегмент `<module>:` | Проверка `model_config` и значений |
 | `test_module_public_exports_only_contracts` | В `public/` нет импортов моделей SQLAlchemy и репозиториев (`dao`, `models`) | AST-обход файлов `public/` (дополняет контракт 3, где `public` выше `services` и может их импортировать для фабрик, но не должен реэкспортировать модели) |
 | `test_redis_keys_are_namespaced` | В `app/modules` нет строковых литералов-ключей без префикса модуля в вызовах Redis | Проверка, что вызовы Redis идут через `ModuleRedis` (контракт 5 запрещает прямой клиент; тест проверяет, что аргумент `prefix` у `ModuleRedis` равен имени пакета, в котором он создаётся) |
 | `test_router_prefix_matches_module` | Все пути REST-роутера модуля начинаются с `/api/v1/<name>/` или с одного из `extra_prefixes`; `extra_prefixes` непуст только у `identity` (`/api/v1/auth`) | Обход `module.router.routes` для всех модулей реестра |
@@ -561,3 +561,4 @@ allow_indirect_imports = True
 | 0.1 | 2026-10-10 | Claude | Черновик | proposed |
 | 0.2 | 2026-10-10 | Claude | Согласование с ADR-003 (`RedisNamespace` → `ModuleRedis`, контракт на пакет `redis`), ADR-004 (префикс `/api/v1/<module>`, контракт «публикация только через outbox», `APP_ROLE`), ADR-007 и ADR-014 (контракт на клиенты хранилищ, пакеты `storage/` и `search/` в shared kernel); исключение `/api/v1/auth` для `identity` (`extra_prefixes`, тест `test_router_prefix_matches_module`) — решение оркестратора (OQ-12) | proposed |
 | 1.0 | 2026-10-10 | пользователь | Принят без изменений (PR #2, слияние в main) | accepted |
+| 1.1 | 2026-10-11 | Claude | Без изменения решений, согласование с SYS-04 и SYS-06 (блок Б этапа 1): `topics.py` перенесён из `brokers/` в `public/` (декларации `TopicDeclaration` с полем `visibility`), пример кода права `IDENTITY_GET_USER` заменён форматом SYS-06 `<module>:<resource>:<action>` (`identity:users:read`); пример был иллюстративным | accepted |
