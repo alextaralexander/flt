@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | proposed |
-| Версия | 0.2 |
+| Статус | accepted |
+| Версия | 1.0 |
 | Дата | 2026-10-10 |
 | Автор | Claude (черновик) |
-| Утвердил | — |
+| Утвердил | пользователь, 2026-10-10 (PR #2) |
 | Пункт(ы) BRD | все |
 | Модуль | все (shared kernel — реализация транспорта) |
 | Зависимости | ADR-002 (раскладка модулей и публичный API пакета), ADR-003 (таблицы `outbox` и `processed_events` в схеме модуля, блокировки и pub/sub Redis) |
@@ -422,3 +422,4 @@ CREATE TABLE <module>.processed_events (
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | proposed |
 | 0.2 | 2026-10-10 | Claude | Согласование с ADR-002 (`public/`, `IdentityService`, `make migrate` по модулям вместо `alembic upgrade heads`), ADR-007 и ADR-014 (`storage-init`, шаблоны индексов в роли `migrate`), ADR-009 (поля конверта, бинарный кадр, коды закрытия 1011/1013, `job.progress`, `SHUTDOWN_GRACE_SECONDS=30`, `terminationGracePeriodSeconds=40`), ADR-008 (каналы `inbox`/`reply`, код 4426), ADR-010 (`/v1/metrics` на обоих портах, заголовок `request_id` в Kafka), ADR-012 (`/api/docs`, `/api/openapi.json`, без `ROOT_PATH`, headless Service `flt-api`, имена Helm `flt-api`/`flt-worker`/`flt-migrate`), ADR-015 (роль `media_agent`); исключение `/api/v1/auth` для `identity` — решение оркестратора | proposed |
+| 1.0 | 2026-10-10 | пользователь | Принят без изменений (PR #2, слияние в main) | accepted |

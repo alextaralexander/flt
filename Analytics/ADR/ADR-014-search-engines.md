@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | proposed |
-| Версия | 0.2 |
+| Статус | accepted |
+| Версия | 1.0 |
 | Дата | 2026-10-10 |
 | Автор | Claude (черновик) |
-| Утвердил | — |
+| Утвердил | пользователь, 2026-10-10 (PR #2) |
 | Пункт(ы) BRD | STU-12 (кэш словарных статей с индексом), STU-27 (семантический поиск по собственным материалам), STU-35.6 (поиск учеников и групп), VIS-02 (фильтры каталога — без поисковых движков) |
 | Модуль | shared kernel (клиенты), `dictionary`, `materials`, `social`; косвенно `courses`, `cms`; ADR-010 для логов |
 | Зависимости | ADR-003 (источник истины PostgreSQL и MinIO, схема на модуль), ADR-004 (события outbox, консьюмеры, роль `migrate`, фоновые задания) |
@@ -305,3 +305,4 @@
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | proposed |
 | 0.2 | 2026-10-10 | Claude | Согласование с ADR-010 (индексы логов `flt-logs-*`, пользователи `fluent-bit`, `grafana`, `flt-backend`, `admin` вместо `fluentbit`/`flt_app`; `OPENSEARCH_USERNAME=flt-backend`; детали `/v1/health`), ADR-013 (`OPENSEARCH_PASSWORD`, `OPENSEARCH_ADMIN_PASSWORD`, `QDRANT_API_KEY`), ADR-002 (пакет `app/core/search`, контракт import-linter), ADR-004 (инициализация ролью `migrate`); фраза о правиле выбора chart-ов (SYS-11, OQ-28) | proposed |
+| 1.0 | 2026-10-10 | пользователь | Принят без изменений (PR #2, слияние в main) | accepted |

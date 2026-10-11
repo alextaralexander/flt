@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | proposed |
-| Версия | 0.2 |
+| Статус | accepted |
+| Версия | 1.0 |
 | Дата | 2026-10-10 |
 | Автор | Claude (черновик) |
-| Утвердил | |
+| Утвердил | пользователь, 2026-10-10 (PR #2) |
 | Пункт(ы) BRD | VIS-04 (регистрация), VIS-05 (вход), ADM-01 (блокировка), TCH-01; косвенно — все (каждый запрос аутентифицируется) |
 | Модуль | identity (владелец); shared kernel `app/core/security` (проверка токена); app_shell (клиентская часть); local_runtime (токен агента `flta_…` — ADR-008, здесь только граница с identity) |
 | Зависимости | ADR-003 (PostgreSQL и Redis), ADR-004 (WebSocket), ADR-013 (хранение ключей подписи) |
@@ -294,3 +294,4 @@ CSRF-токен: `random` — 16 байт base64url, `hmac` = HMAC-SHA256(`AUTH_
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | proposed |
 | 0.2 | 2026-10-10 | Claude | Решения пользователя 2026-10-10: fail-open проверки отзыва без Redis, refresh через PostgreSQL, автопривязка OAuth по подтверждённому email (Google, Яндекс ID), для VK ID — явная привязка. Согласование с ADR-008 (токен агента `flta_…` вместо пары access/refresh клиента `agent`, `POST /api/v1/auth/agent/pair` удалён), ADR-010 (имя метрики `flt_auth_revocation_check_skipped_total`), ADR-002 (`app/modules/identity`), ADR-004 (канал `ws:user:*`) | proposed |
+| 1.0 | 2026-10-10 | пользователь | Принят без изменений (PR #2, слияние в main) | accepted |
