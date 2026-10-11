@@ -2,7 +2,7 @@ asyncapi: 3.0.0
 info:
   title: FLT identity async API
   version: 1.0.0
-  description: Объём этапа 1 (Г.5): события user_registered, user_suspended, session_revoked и сообщение WebSocket об отзыве сессии.
+  description: "Объём этапа 1 (Г.5): события user_registered, user_suspended, session_revoked и сообщение WebSocket об отзыве сессии."
 servers:
   ws:
     $ref: "../../_system/asyncapi-common.yaml#/servers/ws"
