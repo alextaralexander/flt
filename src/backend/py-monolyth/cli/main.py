@@ -8,6 +8,9 @@
     python -m cli list-modules
     python -m cli add-entity Order --module identity --dry-run
 
+Выпуск dev-токенов (`issue-token`) возвращается на этапе 1 Г.5 поверх `TokenIssuer` модуля
+`identity` (ADR-006); симметричный ключ boilerplate удалён (ADR-013).
+
 Скаффолдер не перезаписывает существующие файлы и идемпотентен по вставкам
 (повторный запуск не дублирует импорты, строки роутера, секции и члены enum).
 Сгенерированный код обязан проходить `make check` без правок.
@@ -18,7 +21,6 @@ import ast
 import subprocess  # nosec B404
 import sys
 from pathlib import Path
-from typing import Annotated
 
 import typer
 
@@ -41,7 +43,7 @@ STANDS = ("local", "dev", "test", "prod")
 
 app = typer.Typer(
     add_completion=False,
-    help="Скаффолдер монолита: модули, REST-сущности, Kafka-консьюмеры, выпуск dev-JWT.",
+    help="Скаффолдер монолита: модули, REST-сущности, Kafka-консьюмеры, список модулей.",
 )
 
 
@@ -421,32 +423,6 @@ def list_modules() -> None:
     """Напечатать модули реестра построчно (используют `make migrate` и CI)."""
     for name in read_registry():
         typer.echo(name)
-
-
-@app.command()
-def issue_token(
-    user_id: str = typer.Argument(..., help="USER_ID пользователя (UUID)."),
-    permission: Annotated[
-        list[str] | None,
-        typer.Option("--permission", "-p", help="Прямой permission (можно повторять)."),
-    ] = None,
-    role: Annotated[
-        list[str] | None,
-        typer.Option("--role", "-r", help="Роль из JWT_ROLE_PERMISSIONS (можно повторять)."),
-    ] = None,
-    expires_in: int = typer.Option(3600, "--expires-in", help="Время жизни токена в секундах."),
-) -> None:
-    """Выпустить JWT, подписанный JWT_SECRET_KEY текущего стенда (для локальной разработки)."""
-    # Импорт внутри команды: скаффолдинг не должен требовать настроек стенда.
-    from app.core.security.auth_service import get_auth_service
-
-    token = get_auth_service().create_token(
-        user_id=user_id,
-        permissions=permission or [],
-        roles=role or [],
-        expires_in_seconds=expires_in,
-    )
-    typer.echo(token)
 
 
 if __name__ == "__main__":

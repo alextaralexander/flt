@@ -1,26 +1,26 @@
-"""Основные настройки сервиса.
+"""Основные настройки процесса (shared kernel, раздел 8 спецификации `shared_kernel`).
 
-Значения читаются (в порядке приоритета): переменные окружения → env-файл
-стенда (`envs/<stand>/<stand>.env`, стенд выбирает `STAND_NAME`) → Vault
-(для секретов, см. `configs.vault_config`).
+Значения читаются (в порядке приоритета): переменные окружения → env-файл стенда
+(`envs/<stand>/<stand>.env`, стенд выбирает `STAND_NAME`). Секреты — поля `SecretStr`
+без значения по умолчанию: они приходят только из переменных окружения (`.env` в
+docker-compose, Kubernetes Secret из Vault через External Secrets Operator — ADR-013),
+отсутствие секрета останавливает старт. Исключение — стенд local: его env-файл
+содержит тестовые значения, помеченные `# pragma: allowlist secret`.
 """
 
-from functools import partial
-
 from dotenv import load_dotenv
-from pydantic import Field, computed_field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
 
 from configs.stands import DEFAULT_STAND_NAME, stand_env_file
-from configs.vault_config import vault_secret, vault_secret_or
 
 
 load_dotenv(".env")
 
 
 class Settings(BaseSettings):
-    """Настройки приложения (env → env-файл стенда → Vault)."""
+    """Настройки процесса монолита (env → env-файл стенда)."""
 
     model_config = SettingsConfigDict(
         extra="ignore",
@@ -30,11 +30,11 @@ class Settings(BaseSettings):
     # Main
     STAND_NAME: str = Field(
         default=DEFAULT_STAND_NAME,
-        description="Имя стенда (окружения); определяет, какой env-файл стенда и секреты Vault использовать.",
+        description="Имя стенда (local, dev, test, prod); определяет набор env-файлов стенда.",
     )
     DEBUG_MODE: bool = Field(
         default=False,
-        description="Режим отладки; включается явно на local/dev, на проде выключен из соображений безопасности.",
+        description="Детали ошибок 500 в ответе; включается только на local (ADR-013).",
     )
     MIGRATE_ON_START: bool = Field(
         default=True,
@@ -59,25 +59,25 @@ class Settings(BaseSettings):
         description="Порт, на котором поднимается FastAPI-приложение.",
     )
 
-    # Auth (JWT проверяется локально, внешний сервис авторизации не нужен)
-    JWT_SECRET_KEY: str = Field(
-        default_factory=partial(vault_secret, "JWT_SECRET_KEY"),
-        description="Ключ проверки подписи JWT: секрет для HS* или публичный PEM для RS*/ES* (по умолчанию из Vault).",
-    )
-    JWT_ALGORITHM: str = Field(
-        default="HS256",
-        description="Единственный разрешённый алгоритм подписи JWT.",
+    # Проверка токенов (ADR-006). Ключи подписи JWT_SIGNING_KEYS/JWT_ACTIVE_KID читает модуль
+    # identity (этап 1 Г.5); проверку по kid реализует TokenVerifier shared kernel (этап 1 Г.4).
+    JWT_PUBLIC_KEYS: str = Field(
+        default="",
+        description='Публичные ключи проверки JWT по kid, JSON {"<kid>": "<PEM>"}; пусто — из JWT_SIGNING_KEYS.',
     )
     JWT_ISSUER: str = Field(
-        default="",
-        description="Ожидаемое значение claim `iss`; пустая строка — не проверять.",
+        default="flt",
+        description="Ожидаемое значение claim `iss`.",
     )
-    JWT_ROLE_PERMISSIONS: dict[str, list[str]] = Field(
-        default_factory=dict,
-        description='Маппинг «роль из claim ROLES → permissions», JSON: {"ADMIN": ["GET_MY_ENTITY", ...]}.',
+    JWT_AUDIENCE: str = Field(
+        default="flt-api",
+        description="Ожидаемое значение claim `aud`.",
+    )
+    AUTH_CSRF_SECRET: SecretStr = Field(
+        description="Ключ HMAC signed double-submit CSRF-токена (секрет, ADR-006, ADR-013).",
     )
 
-    # PostgresDatabaseAccess
+    # PostgreSQL (одна база flt, схема на модуль — ADR-003)
     PG_HOST: str = Field(
         description="Хост Postgres.",
     )
@@ -88,26 +88,14 @@ class Settings(BaseSettings):
         description="Имя базы данных Postgres.",
     )
     PG_DRIVER: str = Field(
-        description="Драйвер подключения к Postgres (например, asyncpg).",
+        default="asyncpg",
+        description="Драйвер подключения к Postgres.",
     )
     PG_USERNAME: str = Field(
-        default_factory=partial(vault_secret, "PG_USERNAME"),
-        description="Имя пользователя Postgres (по умолчанию читается из Vault).",
+        description="Имя пользователя Postgres (вне local — из переменных окружения, ADR-013).",
     )
-    PG_PASSWORD: str = Field(
-        default_factory=partial(vault_secret, "PG_PASSWORD"),
-        description="Пароль пользователя Postgres (по умолчанию читается из Vault).",
-    )
-
-    # Redis
-    REDIS_HOST: str = Field(
-        description="Хост Redis.",
-    )
-    REDIS_PORT: int = Field(
-        description="Порт Redis.",
-    )
-    REDIS_DB: int = Field(
-        description="Номер базы данных Redis.",
+    PG_PASSWORD: SecretStr = Field(
+        description="Пароль пользователя Postgres (секрет, ADR-013).",
     )
 
     # Database Engine Settings
@@ -146,57 +134,27 @@ class Settings(BaseSettings):
         description="Префикс пути монтирования приложения (root_path) за обратным прокси.",
     )
 
-    # Opentelemetry
+    # OpenTelemetry: экспорт трейсов выключен до этапа 4 (ADR-010, OQ-20).
     OTLP_EXPORTER_ENDPOINT: str = Field(
         default="",
-        description="Endpoint OTLP-экспортёра трасс и метрик OpenTelemetry.",
+        description="Endpoint OTLP-экспортёра трейсов; пусто — экспорт выключен.",
     )
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def sqlalchemy_database_uri(self) -> str:
-        """DSN подключения к Postgres; URL.create экранирует спецсимволы в пароле."""
+        """DSN подключения к Postgres; URL.create экранирует спецсимволы в пароле.
+
+        Обычное свойство, а не `computed_field`: DSN с паролем не должен попадать
+        в `repr` и `model_dump` настроек.
+        """
         return URL.create(
             drivername=f"postgresql+{self.PG_DRIVER}",
             username=self.PG_USERNAME,
-            password=self.PG_PASSWORD,
+            password=self.PG_PASSWORD.get_secret_value(),
             host=self.PG_HOST,
             port=self.PG_PORT,
             database=self.PG_DATABASE,
         ).render_as_string(hide_password=False)
-
-    OPEN_SEARCH_URL: str = Field(
-        default="",
-        description="URL OpenSearch для отправки логов.",
-    )
-    OPEN_SEARCH_LOGS_ENABLED: bool = Field(
-        default=False,
-        description="Включить отправку логов в OpenSearch.",
-    )
-    OPEN_SEARCH_VERIFY_SSL: bool = Field(
-        default=True,
-        description="Проверять SSL-сертификат при подключении к OpenSearch.",
-    )
-    OPEN_SEARCH_USER_NAME: str = Field(
-        default_factory=partial(vault_secret_or, "OPEN_SEARCH_USER_NAME", ""),
-        description="Имя пользователя OpenSearch (по умолчанию читается из Vault).",
-    )
-    OPEN_SEARCH_PASSWORD: str = Field(
-        default_factory=partial(vault_secret_or, "OPEN_SEARCH_PASSWORD", ""),
-        description="Пароль пользователя OpenSearch (по умолчанию читается из Vault).",
-    )
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def open_search_index(self) -> str:
-        """Имя OpenSearch-индекса логов текущего стенда."""
-        return f"{self.STAND_NAME}.flt"
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def open_search_service_name(self) -> str:
-        """Значение поля `service_name` в записях логов OpenSearch."""
-        return f"{self.STAND_NAME}.flt-backend"
 
 
 settings = Settings()

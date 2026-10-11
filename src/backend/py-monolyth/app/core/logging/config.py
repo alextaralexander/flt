@@ -1,4 +1,6 @@
-"""Конфигурация structlog: процессоры, форматтеры, интеграция с uvicorn/OpenSearch.
+"""Конфигурация structlog: процессоры, форматтеры, интеграция с uvicorn.
+
+Логи пишутся только в stdout (JSON при `LOG_JSON_FORMAT`); их собирает Fluent Bit (ADR-010).
 
 Написан на основе https://gist.github.com/nymous/f138c7f06062b7c43c060bf03759c29e
 """
@@ -10,11 +12,6 @@ from typing import Any
 import structlog
 from structlog.types import Processor
 
-from app.core.logging.opensearch_sink import (
-    EXCLUDED_OPENSEARCH_LOGGERS,
-    configure_opensearch_sink,
-    send_to_opensearch_batch,
-)
 from app.core.logging.processors import (
     add_open_telemetry_trace_context,
     drop_color_message_key,
@@ -52,9 +49,6 @@ class LoggerConfig:
         """Настраивает логирование (идемпотентно: повторные вызовы — no-op)."""
         if self._is_configured:
             return
-
-        if configure_opensearch_sink():
-            self.shared_processors.append(send_to_opensearch_batch)
 
         if settings.LOG_JSON_FORMAT:
             # Переименовываем `event` в `message` только для JSON-логов.
@@ -104,8 +98,6 @@ class LoggerConfig:
         # Конфигурация для SQLAlchemy (меньше шума)
         logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
         logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
-        for logger_name in EXCLUDED_OPENSEARCH_LOGGERS:
-            logging.getLogger(logger_name).setLevel(logging.WARNING)
 
         sys.excepthook = self.handle_exception
         self._is_configured = True

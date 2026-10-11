@@ -1,1 +1,1 @@
-"""Prometheus-метрики и сервисные endpoint-ы (health/ready/info)."""
+"""Prometheus-метрики и служебные эндпоинты (health/ready/metrics)."""

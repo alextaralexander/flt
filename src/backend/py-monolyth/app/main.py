@@ -26,7 +26,6 @@ from app.core.logging import logger_settings
 from app.core.metrics.metrics_controller import router as service_router
 from app.core.metrics.metrics_middleware import PrometheusMiddleware
 from app.core.modules import ModuleDefinition, load_modules, module_routers
-from app.core.security.auth_service import reset_auth_service
 from app.core.telemetry import SERVICE_NAME, setup_telemetry, stop_telemetry
 from app.modules.registry import MODULES
 from configs.settings import settings
@@ -47,7 +46,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     yield
 
     await close_redis_client()
-    reset_auth_service()
     await dispose_engine()
     stop_telemetry(tracer_provider)
 

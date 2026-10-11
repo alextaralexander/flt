@@ -29,12 +29,11 @@ dependencies = [
     "python-multipart>=0.0.20",
     "PyJWT>=2.10,<3",
     "cryptography>=44",
-    "hvac>=2.3,<3",
     # HTTP client
     "httpx>=0.28,<1",
     # Metrics, tracing, monitoring
     "prometheus-client>=0.21,<1",
-    "psutil>=7,<8",
+    # Клиент поиска shared kernel (ADR-014, этап 1 Г.4); логи в OpenSearch доставляет Fluent Bit (ADR-010).
     "opensearch-py>=3.1,<4",
     "opentelemetry-api>=1.38,<2",
     "opentelemetry-sdk>=1.38,<2",
@@ -80,7 +79,6 @@ dev = [
     "bandit>=1.8,<2",
     "detect-secrets>=1.5,<2",
     # Стабы для типизации
-    "types-psutil>=7",
     "types-PyYAML>=6",
 ]
 
@@ -173,14 +171,8 @@ module = "py_main_lib.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# Декоратор FastStream `@router.subscriber(**kwargs)` теряет типы при распаковке
-# kwargs (subscriber_config) — сами хендлеры при этом полностью типизированы.
-module = ["app.brokers.kafka.subscribers"]
-disallow_untyped_decorators = false
-
-[[tool.mypy.overrides]]
-# hvac и aiokafka не публикуют стабы / py.typed.
-module = ["hvac.*", "aiokafka.*"]
+# aiokafka не публикует стабы / py.typed.
+module = ["aiokafka.*"]
 ignore_missing_imports = true
 
 # --- Pytest / coverage ---------------------------------------------------------
