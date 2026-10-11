@@ -15,4 +15,5 @@ module_state = [
     { file = "app/core/dao/db_helpers/db_connection.py", name = "_session_maker", reason = "фабрика сессий поверх пула процесса (SYS-05 §6)" },
     { file = "app/core/dao/caching/redis_conn.py", name = "_redis_client", reason = "клиент Redis процесса (SYS-05 §6)" },
     { file = "app/core/dao/caching/redis_conn.py", name = "_redis_client_loop", reason = "event loop клиента Redis процесса (SYS-05 §6)" },
+    { file = "app/core/metrics/process_metrics.py", name = "_pool_collector", reason = "коллектор пулов, зарегистрированный в реестре Prometheus процесса один раз (ADR-010)" },
 ]

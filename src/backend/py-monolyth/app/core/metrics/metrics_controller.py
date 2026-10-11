@@ -2,12 +2,14 @@
 
 Открыты без авторизации: их опрашивают HAProxy, probes и Prometheus; снаружи они
 недоступны, так как лежат вне `/api` (ADR-012). `/v1/info` и `/v1/system-metrics`
-boilerplate удалены (ADR-010). Readiness по ролям — этап 1 Г.9.
+boilerplate удалены (ADR-010). Readiness — по проверкам роли из `app.state.readiness`:
+при отказе зависимости 503 с деталями, тело вне конверта `ErrorResponseV1` (ADR-010, раздел 3.4).
 """
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi.responses import JSONResponse
 from prometheus_client import CONTENT_TYPE_LATEST
 
 from app.core.metrics.metrics_schema import HealthStatusResponse, ReadinessStatusResponse
@@ -59,12 +61,14 @@ async def health_check(service: MetricsServiceDep) -> HealthStatusResponse:
     summary="Readiness check endpoint",
     description="Readiness check endpoint",
     operation_id="readiness_check",
+    responses={status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ReadinessStatusResponse}},
 )
-async def ready_check(service: MetricsServiceDep) -> ReadinessStatusResponse:
+async def ready_check(request: Request, service: MetricsServiceDep) -> Response:
     """Проверка готовности сервиса к обработке запросов.
 
     Returns:
-        Статус готовности сервиса.
+        200 — зависимости роли доступны; 503 — нет, с деталями проверок.
     """
-    result = await service.get_readiness_status()
-    return ReadinessStatusResponse(payload=result)
+    ready, result = await service.get_readiness_status(getattr(request.app.state, "readiness", None))
+    body = ReadinessStatusResponse(payload=result).model_dump(mode="json")
+    return JSONResponse(body, status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE)

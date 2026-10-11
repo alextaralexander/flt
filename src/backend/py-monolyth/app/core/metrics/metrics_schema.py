@@ -14,6 +14,11 @@ class HealthStatusSchema(BaseModel):
     timestamp: float = Field(
         description="Временная метка",
     )
+    checks: dict[str, str] = Field(
+        default_factory=dict,
+        description="Информационные детали зависимостей (`redis`); на код ответа не влияют.",
+        examples=[{"redis": "ok"}],
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -23,10 +28,15 @@ class ReadinessStatusSchema(BaseModel):
 
     status: str = Field(
         description="Статус готовности",
-        examples=["ready"],
+        examples=["ready", "not_ready"],
     )
     timestamp: float = Field(
         description="Временная метка",
+    )
+    checks: dict[str, str] = Field(
+        default_factory=dict,
+        description="Проверки роли: `ok` или ошибка (`postgres`, `kafka`).",
+        examples=[{"postgres": "ok"}],
     )
 
     model_config = ConfigDict(from_attributes=True)

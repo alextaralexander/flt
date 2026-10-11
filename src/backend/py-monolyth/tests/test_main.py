@@ -89,9 +89,9 @@ class TestCreateWorkerApp:
         # - Assert -
         assert received == [{"value": 1}]
 
-    @pytest.mark.parametrize("path", WORKER_SERVICE_PATHS)
+    @pytest.mark.parametrize("path", [path for path in WORKER_SERVICE_PATHS if path != "/v1/ready"])
     async def test_service_paths_are_served(self, path: str) -> None:
-        """`/v1/health`, `/v1/ready`, `/v1/metrics` отвечают на служебном порту воркера."""
+        """`/v1/health` и `/v1/metrics` отвечают на служебном порту воркера; `/v1/ready` — в test_readiness."""
         # - Arrange -
         worker = create_worker_app([])
 
