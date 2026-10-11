@@ -41,6 +41,24 @@ services:
       timeout: 5s
       retries: 20
 
+  # S3-хранилище файлов (ADR-007). Официальный образ minio/minio больше не публикуется; на этапе 1 —
+  # зафиксированный образ, сервер для prod — OQ-64. Порт 9000 — только loopback (снаружи — HAProxy, Г.8).
+  minio:
+    image: bitnamilegacy/minio:2025.7.23
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-flt_local_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-flt_local_minio_secret} # pragma: allowlist secret
+      MINIO_BROWSER: "off"
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - minio-data:/bitnami/minio/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   kafka:
     image: apache/kafka:4.1.0
     environment:
@@ -92,3 +110,4 @@ services:
 
 volumes:
   postgres-data:
+  minio-data:
