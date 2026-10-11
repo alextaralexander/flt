@@ -10,6 +10,7 @@
 """
 
 from collections.abc import AsyncGenerator, Iterator
+from datetime import datetime
 from typing import Any
 
 import pytest
@@ -25,10 +26,12 @@ from app.core.dao.db_helpers.db_connection import get_session
 from app.core.security.schemas import UserSecuritySchema
 from app.core.security.security import get_current_user
 from app.core.telemetry import SERVICE_NAME, setup_telemetry
+from app.core.time import Clock
 from app.main import create_app
 from app.modules.registry import MODULES
 from configs.settings import settings
 from tests.settings import test_settings
+from tests.support.clock import FrozenClock
 from tests.support.stand_guard import assert_test_database
 
 
@@ -149,6 +152,22 @@ async def client(overridden_app: FastAPI) -> AsyncGenerator[AsyncClient]:
         timeout=1,
     ) as async_client:
         yield async_client
+
+
+@pytest.fixture
+def frozen_clock(monkeypatch: pytest.MonkeyPatch) -> FrozenClock:
+    """Останавливает `Clock` shared kernel на 2026-10-10T12:00:00Z (SYS-10-R17).
+
+    Все экземпляры `Clock` возвращают время управляемых часов: `frozen_clock.set(...)`,
+    `frozen_clock.advance(timedelta(...))`. Подмена снимается после теста.
+    """
+    clock = FrozenClock()
+
+    def frozen_now(self: Clock) -> datetime:
+        return clock.now()
+
+    monkeypatch.setattr(Clock, "now", frozen_now)
+    return clock
 
 
 @pytest.hookimpl(trylast=True)
