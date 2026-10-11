@@ -41,7 +41,7 @@ def get_session_maker() -> async_sessionmaker[AsyncSession]:
     return _session_maker
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession]:
     """FastAPI-зависимость: сессия БД на время запроса."""
     async with get_session_maker()() as session:
         yield session

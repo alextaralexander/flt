@@ -2,7 +2,7 @@
 # Dev-сборка: py-main-lib (path-зависимость uv) берётся из build-context-а:
 #   docker build -f Dockerfile-dev --build-context py-main-lib=../py-main-lib .
 
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY . .
 
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 RUN groupadd --gid 1000 app && useradd --uid 1000 --gid app --no-create-home app
 

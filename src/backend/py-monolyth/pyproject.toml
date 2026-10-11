@@ -2,7 +2,7 @@
 name = "python-boilerplate"
 version = "0.1.0"
 description = "Production FastAPI boilerplate: Kafka (FastStream), AsyncAPI, OTel, Vault."
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 # Диапазоны вместо жёстких пинов: точные версии фиксирует uv.lock,
 # обновление — `uv lock --upgrade` (или Renovate) + прогон `make check`.
 dependencies = [
@@ -99,7 +99,7 @@ skips = ["B101"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+target-version = "py314"
 extend-exclude = ["app/core/dao/db_helpers/migrations/versions"]
 
 [tool.ruff.lint]
@@ -152,6 +152,7 @@ lines-after-imports = 2
 
 [tool.mypy]
 plugins = ['pydantic.mypy']
+python_version = "3.14"
 exclude = ['.git', '__pycache__', 'migrations']
 # strict включает разом disallow_untyped_defs/calls, disallow_any_generics,
 # warn_return_any, warn_unused_ignores, no_implicit_reexport и остальной набор;

@@ -74,7 +74,7 @@ def db_migrate() -> Iterator[None]:
 
 
 @pytest_asyncio.fixture
-async def overridden_get_session(db_migrate: None) -> AsyncGenerator[AsyncSession, None]:
+async def overridden_get_session(db_migrate: None) -> AsyncGenerator[AsyncSession]:
     """Сессия тестовой БД, которой подменяется штатная `get_session`."""
     async with async_session_maker() as session:
         yield session
@@ -102,7 +102,7 @@ async def overridden_app(
       выполняется по-настоящему — RBAC-логика остаётся покрытой).
     """
 
-    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+    async def override_get_db() -> AsyncGenerator[AsyncSession]:
         try:
             yield overridden_get_session
         finally:
@@ -135,7 +135,7 @@ def override_auth_for_no_db_tests(request: pytest.FixtureRequest, monkeypatch: p
 
 
 @pytest.fixture
-async def client(overridden_app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
+async def client(overridden_app: FastAPI) -> AsyncGenerator[AsyncClient]:
     """HTTP-клиент поверх ASGI-приложения (без реального сокета)."""
     async with AsyncClient(
         transport=ASGITransport(app=overridden_app),

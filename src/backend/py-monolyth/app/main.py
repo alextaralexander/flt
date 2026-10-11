@@ -28,7 +28,7 @@ from configs.settings import settings
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Жизненный цикл ресурсов: startup — создание, shutdown — освобождение."""
     tracer_provider = setup_telemetry(SERVICE_NAME, settings.OTLP_EXPORTER_ENDPOINT)
     app.state.tracer_provider = tracer_provider

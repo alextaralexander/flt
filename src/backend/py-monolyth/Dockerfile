@@ -5,7 +5,7 @@
 # В docker-compose контекст задан в deploy/docker-compose/docker-compose.yml (additional_contexts).
 
 # --- Стадия 1: сборка окружения из uv.lock ----------------------------------
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY . .
 
 # --- Стадия 2: рантайм (без uv, без кэшей, non-root) -------------------------
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 RUN groupadd --gid 1000 app && useradd --uid 1000 --gid app --no-create-home app
 

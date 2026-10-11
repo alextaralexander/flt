@@ -10,7 +10,7 @@ from tests.settings import test_settings
 
 
 @pytest_asyncio.fixture
-async def created_my_entity(overridden_get_session: AsyncSession) -> AsyncGenerator[MyEntity, None]:
+async def created_my_entity(overridden_get_session: AsyncSession) -> AsyncGenerator[MyEntity]:
     """Создание сущности в БД.
 
     После выполнения теста "подчищает за собой", удаляя сущность из БД.

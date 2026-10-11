@@ -146,7 +146,7 @@ class _FastStream06TelemetryAdapter(_AdapterTypingBase):
         """Имя span-а на приём: `message_type` из тела, иначе topic/subject."""
         try:
             body = json.loads(getattr(msg, "body", b"") or b"{}")
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             body = {}
         if isinstance(body, dict) and isinstance(body.get("header"), dict) and body["header"].get("message_type"):
             return str(body["header"]["message_type"])
