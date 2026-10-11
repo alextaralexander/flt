@@ -3,8 +3,8 @@
 | Поле | Значение |
 |---|---|
 | Статус | draft |
-| Версия | 0.1 |
-| Дата | 2026-10-10 |
+| Версия | 0.2 |
+| Дата | 2026-10-11 |
 | Автор | Claude (черновик) |
 | Утвердил | |
 | Пункт(ы) BRD | все |
@@ -26,7 +26,7 @@
 | TDD, Критерий приёмки (AC), Гейт, Конвейер фичи, Контрактный тест, Архитектурный тест, Тест масштабируемости, Матрица трассировки | [глоссарий](../../glossary.md), раздел 12 |
 | Тег критерия | Пометка теста ID критерия приёмки `<ID ТЗ>-AC<N>` или ID требования `SYS-NN-R<M>`: маркер pytest `ac`/`req`, ID в квадратных скобках в имени теста Vitest, тег Playwright `@<ID>` (R12–R14) |
 | Тестовая БД | База PostgreSQL `flt_test`, отдельная от базы стенда local `flt`; её схемы создают и удаляют миграции в сессии pytest (R4) |
-| Кассета | Файл `tests/cassettes/<module>/<name>.yaml` с записанными запросом и ответом внешнего LLM-провайдера, который заглушка воспроизводит в тестах (R18) |
+| Кассета | Файл `tests/fixtures/llm_cassettes/<module>/<name>.yaml` (LLM) или `tests/fixtures/speech_cassettes/<name>.yaml` (речь) с записанными запросом и ответом внешнего LLM-провайдера, который заглушка воспроизводит в тестах (R18) |
 | Режим `record` / `replay` | Режим заглушки LLM: `record` вызывает реальный провайдер и сохраняет кассету (только локально, с реальным ключом); `replay` читает кассету и не ходит в сеть (единственный режим в CI) |
 | Карантин | Временное исключение нестабильного теста из блокирующих проверок с обязательной ссылкой на issue и сроком (R29) |
 | Смоук-набор (`@smoke`) | Минимальный набор тестов «ходячего скелета» (SDD_plan.md, этап 1 Г.11), которым проверяются стенд N3, kind и прод после деплоя (R31) |
@@ -62,7 +62,7 @@
 
 ### SYS-10-R2 Расположение тестов зеркалит код
 
-- **Формулировка**: Тесты backend должны лежать по схеме `tests/core/<путь как в app/core>`, `tests/modules/<module>/{unit,integration,contract,migrations}/`, `tests/architecture/`, `tests/n_instances/<module>/`, `tests/load/`, `tests/cassettes/<module>/`, `tests/fixtures/`, `tests/seeds/`; тесты frontend — рядом с кодом (`*.test.ts`, `*.test.tsx`) или в `__tests__/` модуля, E2E — в `src/frontend/e2e/tests/<module>/` и `e2e/smoke/`; тест одного модуля не должен импортировать тесты и фикстуры другого модуля.
+- **Формулировка**: Тесты backend должны лежать по схеме `tests/core/<путь как в app/core>`, `tests/modules/<module>/{unit,integration,contract,migrations}/`, `tests/architecture/`, `tests/n_instances/<module>/`, `tests/load/`, `tests/fixtures/` (в том числе `llm_cassettes/<module>/`, `speech_cassettes/`, `llm_stub/`), `tests/seeds/`; тесты frontend — рядом с кодом (`*.test.ts`, `*.test.tsx`) или в `__tests__/` модуля, E2E — в `src/frontend/e2e/tests/<module>/` и `e2e/smoke/`; тест одного модуля не должен импортировать тесты и фикстуры другого модуля.
 - **Обоснование**: ADR-002, раздел 3.1, правило 6 (тесты зеркалят `app/modules/<module>`); при выделении модуля его тесты переносятся вместе с ним.
 - **Проверка**: архитектурный тест `tests/architecture/test_test_layout.py` (будет создан): каждый каталог `tests/modules/<name>` соответствует модулю реестра; в `tests/modules/<a>/**` нет импортов `tests.modules.<b>`; каждый файл в `tests/n_instances/**` помечен `n_instances` (SYS-05-R45); ESLint `import-x/no-restricted-paths` для тестов frontend (зоны модулей распространяются на `*.test.tsx`).
 - **Применимость**: backend, frontend.
@@ -192,14 +192,14 @@
 
 ### SYS-10-R18 Детерминированная заглушка LLM: record/replay
 
-- **Формулировка**: Провайдер `stub` модуля `llm_gateway` должен в режиме `LLM_STUB_MODE=replay` (единственный допустимый в CI и по умолчанию) отвечать содержимым кассеты `tests/cassettes/<module>/<name>.yaml`, выбранной по ключу `sha256` нормализованного запроса (провайдер, модель, сообщения, `temperature`, `max_tokens`, `tools`), стримить дельты с задержкой `LLM_STUB_DELTA_DELAY_MS` (по умолчанию 20, в тестах — 0) и падать с ошибкой `CassetteMissing` при отсутствии кассеты; в режиме `record` (только локально, при заданном реальном ключе провайдера и явном `LLM_STUB_RECORD_ALLOWED=1`) — вызывать реального провайдера и записывать кассету с маскированием ключей и заголовков; кассеты не должны содержать персональные данные и реальные ключи.
+- **Формулировка**: Провайдер `stub` модуля `llm_gateway` должен работать в режимах SYS-08-R25: `scripted` (по умолчанию в pytest, на стенде local и в CI: текст из `tests/fixtures/llm_stub/<scenario>.txt`) и `replay` (выбирается фикстурой `llm_stub` теста: ответ из кассеты `tests/fixtures/llm_cassettes/<module>/<name>.yaml`, выбранной по `request_hash` — `sha256` канонического JSON из `messages`, `llm_model`, `params`, `tools`, `response_format`), стримить дельты с задержкой `LLM_STUB_DELTA_DELAY_MS` (по умолчанию 20, в тестах — 0) и падать с ошибкой `CassetteMissingError` при отсутствии кассеты; в режиме `record` (только локально, при заданном реальном ключе провайдера и явном `LLM_STUB_RECORD_ALLOWED=1`; при `CI=true` запрещён валидатором настроек) — вызывать реального провайдера и записывать кассету с маскированием ключей и заголовков; кассеты не должны содержать персональные данные и реальные ключи.
 - **Обоснование**: CLAUDE.md «TDD»: LLM-провайдеры в тестах подменяются заглушками, тесты детерминированы и не требуют сети или ключей; ADR-009, раздел 3.3 (провайдер `stub` с задержкой); ADR-011, раздел 3.6 (в тестах секретов нет).
-- **Проверка**: unit-тесты `tests/modules/llm_gateway/unit/test_stub_provider.py` (будут созданы: replay по ключу, `CassetteMissing`, порядок `start → delta* → end`, `usage` из кассеты; `record` без `LLM_STUB_RECORD_ALLOWED` — ошибка); `detect-secrets` сканирует `tests/cassettes/**`; архитектурный тест `test_cassettes_have_no_secrets` (регулярные выражения ключей провайдеров из ADR-010, п. 3.2.3); в CI переменная `LLM_STUB_MODE` не задаётся (replay по умолчанию).
+- **Проверка**: unit-тесты `tests/modules/llm_gateway/unit/providers/test_stub.py` (будут созданы: `scripted` по сценарию, replay по ключу, `CassetteMissingError`, порядок `start → delta* → end`, `usage` из кассеты; `record` без `LLM_STUB_RECORD_ALLOWED` — ошибка); `detect-secrets` сканирует `tests/fixtures/llm_cassettes/**` и `tests/fixtures/speech_cassettes/**`; тест `tests/fixtures/test_cassettes_have_no_secrets.py` (регулярные выражения ключей провайдеров из ADR-010, п. 3.2.3); в CI переменная `LLM_STUB_MODE` не задаётся (`scripted` по умолчанию, `replay` — по фикстуре теста).
 - **Применимость**: backend, tests, CI.
 
 ### SYS-10-R19 Заглушки синтеза и распознавания речи (этап 5)
 
-- **Формулировка**: Модуль `speech` должен предоставлять провайдеры `stub` для TTS (возвращает детерминированный PCM16-сигнал заданной длительности, пропорциональной длине текста, и `visemes[]` из фикстуры) и STT (возвращает транскрипт из кассеты `tests/cassettes/speech/<name>.yaml` по `sha256` аудио, промежуточные `partial` — префиксы финального текста); режимы `record`/`replay` — как у LLM (R18).
+- **Формулировка**: Модуль `speech` должен предоставлять провайдеры `stub` для TTS (возвращает детерминированный PCM16-сигнал заданной длительности, пропорциональной длине текста, и `visemes[]` из фикстуры) и STT (возвращает транскрипт из кассеты `tests/fixtures/speech_cassettes/<name>.yaml` по `sha256` аудио, промежуточные `partial` — префиксы финального текста); режимы `record`/`replay` — как у LLM (R18).
 - **Обоснование**: CLAUDE.md «Технологический стек»: провайдеры речи по аналогии с LLM; ADR-009, раздел 3.7.
 - **Проверка**: тесты `tests/modules/speech/unit/test_stub_providers.py` (этап 5); требование действует с появления модуля `speech`.
 - **Применимость**: backend (этап 5).
@@ -350,7 +350,7 @@
 | все доменные модули | Структура `tests/modules/<module>/{unit,integration,contract,migrations}/`; контрактные тесты REST и AsyncAPI; `test_permissions.py`; тесты миграций с данными; кассеты в `tests/cassettes/<module>/`; сиды `tests/seeds/<module>.py` |
 | frontend app_shell и модули | `coverage.thresholds`; правила ESLint `flt/test-title-has-id`, `flt/playwright-test-has-tag`, `flt/no-unreferenced-skip`, запрет `vi.mock` транспорта; `playwright.config.ts` с проектами `chromium-desktop`, `chromium-mobile`, `ar`, `retries: 0`, фикстура `loginAs`; `e2e/smoke/**`; `stories-exist.test.ts`; `src/testing/i18n-samples.ts` |
 | `src/tools` | Команды `flt-tools traceability generate` и `check`, `quality check-thresholds`, `quality durations` (SYS-12); тесты на фикстурах |
-| deploy | Init-скрипт `01-create-test-db.sql`; контейнеры `mailpit`, `mock-oidc`, `minio` в профиле `test`; `REDIS_DB=15` не требует конфигурации Redis |
+| deploy | Init-скрипт `01-create-test-db.sql`; контейнеры `mailpit` и `mock-oidc` в профилях `dev` и `ci`, `minio` — в базовом составе (SYS-11-R4, R5); `REDIS_DB=15` не требует конфигурации Redis |
 
 ### 4.2. Шаблон ТЗ
 
@@ -460,7 +460,7 @@ CREATE DATABASE flt_test OWNER flt;
 ### Пример 3. Кассета заглушки LLM (SYS-10-R18)
 
 ```yaml
-# tests/cassettes/llm_gateway/connection_check_en.yaml
+# tests/fixtures/llm_cassettes/llm_gateway/connection_check_en.yaml
 version: 1
 recorded_at: "2026-10-10T12:00:00Z"
 provider: openai_compatible
@@ -545,8 +545,8 @@ from tests.permissions_matrix import ROLES, expect_for
 @pytest.mark.parametrize("role", ROLES)   # anonymous, learner, teacher, platform_admin
 async def test_create_plan_requires_learner(as_role: AsRole, role: str, plan_request: dict) -> None:
     client = await as_role(role)
-    response = await client.post("/api/v1/learning_plan/plans", json=plan_request)
-    assert response.status_code == expect_for(role, permission="LEARNING_PLAN_CREATE_PLAN", success=201)
+    response = await client.post("/api/v1/learning-plan/plans", json=plan_request)
+    assert response.status_code == expect_for(role, permission="learning_plan:plans:create", success=201)
     # anonymous → 401, teacher и platform_admin без права → 403, learner → 201
 ```
 
@@ -672,3 +672,4 @@ test('[STU-19-AC4] recalculates progress', { annotation: { type: 'quarantine', d
 | Версия | Дата | Автор | Что изменилось | Статус |
 |---|---|---|---|---|
 | 0.1 | 2026-10-10 | Claude | Черновик | draft |
+| 0.2 | 2026-10-11 | Claude | Согласование SYS-01…SYS-12: профиль compose `test` → `ci` (профили `dev`, `ci`, `prod`, `recording` — SYS-11); кассеты — `tests/fixtures/llm_cassettes/<module>/`, `tests/fixtures/speech_cassettes/`, фикстуры заглушки — `tests/fixtures/llm_stub/`, тест секретов — `tests/fixtures/test_cassettes_have_no_secrets.py` (как в SYS-08-R25); R18 — режимы `scripted` (по умолчанию) и `replay` по фикстуре теста вместо «только replay», `CassetteMissingError`, ключ кассеты по SYS-08; пример теста прав — путь `learning-plan` и код права `learning_plan:plans:create` (SYS-06) | draft |
